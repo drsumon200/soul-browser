@@ -86,6 +86,18 @@ class SoulPermissionDelegate(
         val host = extractDisplayHost(uri).ifBlank { uri }
         val wantsVideo = !video.isNullOrEmpty()
         val wantsAudio = !audio.isNullOrEmpty()
+        val cameraGranted = ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+        val microphoneGranted = ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if ((wantsVideo && !cameraGranted) || (wantsAudio && !microphoneGranted)) {
+            callback.reject()
+            return
+        }
         val description = when {
             wantsVideo && wantsAudio -> "camera and microphone"
             wantsVideo -> "camera"
