@@ -35,9 +35,11 @@ object BrowserSessionEnhancer {
         session: GeckoSession,
         permissionDelegate: GeckoSession.PermissionDelegate,
         desktopModeDefault: Boolean,
-        hooks: SessionEnhancementHooks
+        hooks: SessionEnhancementHooks,
+        trackingProtection: Boolean = true
     ) {
         session.permissionDelegate = permissionDelegate
+        session.settings.useTrackingProtection = trackingProtection
         if (wrappedSessions[session] == true) return
 
         session.selectionActionDelegate = BasicSelectionActionDelegate(activity)
