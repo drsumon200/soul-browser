@@ -655,7 +655,8 @@ private fun SoulApp(
             session = session,
             permissionDelegate = permissionDelegate,
             desktopModeDefault = settings.desktopModeDefault,
-            hooks = enhancementHooks
+            hooks = enhancementHooks,
+            trackingProtection = settings.trackingProtection
         )
     }
 
@@ -873,7 +874,7 @@ private fun SoulApp(
                             .fillMaxWidth(),
                         activeContainer = activeContainer,
                         onOpen = { rawUrl ->
-                            val target = normalizeAddress(rawUrl)
+                            val target = normalizeAddress(rawUrl, settings.searchEngine)
                             if (target.isNotBlank()) navigateTo(target)
                         },
                         onNewTab = { createTab() }
@@ -1035,6 +1036,9 @@ private fun SoulApp(
                 settings = settings,
                 onUpdate = {
                     settings = it
+                    tabs.forEach { tab ->
+                        tab.session?.settings?.useTrackingProtection = it.trackingProtection
+                    }
                     BrowserSettingsStore.save(context, it)
                 },
                 onDismiss = { showSettings = false }
