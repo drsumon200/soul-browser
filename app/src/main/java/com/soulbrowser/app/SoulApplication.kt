@@ -3,13 +3,10 @@ package com.soulbrowser.app
 import android.app.Application
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import org.mozilla.geckoview.ContentBlocking
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoRuntimeSettings
 
-/**
- * Owns the single GeckoRuntime for the lifetime of this Android process.
- * GeckoRuntime.create() must never be called from an Activity recreation path.
- */
 object GeckoRuntimeProvider {
     @Volatile
     private var instance: GeckoRuntime? = null
@@ -20,15 +17,32 @@ object GeckoRuntimeProvider {
             val appContext = context.applicationContext
             val isDebuggable =
                 (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+            val contentBlocking = ContentBlocking.Settings.Builder()
+                .antiTracking(
+                    ContentBlocking.AntiTracking.DEFAULT or
+                        ContentBlocking.AntiTracking.STP or
+                        ContentBlocking.AntiTracking.CRYPTOMINING or
+                        ContentBlocking.AntiTracking.FINGERPRINTING
+                )
+                .cookieBehavior(
+                    ContentBlocking.CookieBehavior.ACCEPT_FIRST_PARTY_AND_ISOLATE_OTHERS
+                )
+                .cookiePurging(true)
+                .bounceTrackingProtectionMode(
+                    ContentBlocking.BounceTrackingProtectionMode
+                        .BOUNCE_TRACKING_PROTECTION_MODE_ENABLED
+                )
+                .build()
+
             val settings = GeckoRuntimeSettings.Builder()
                 .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_DARK)
-                .aboutConfigEnabled(true)
+                .contentBlocking(contentBlocking)
+                .aboutConfigEnabled(isDebuggable)
                 .remoteDebuggingEnabled(isDebuggable)
                 .build()
 
-            GeckoRuntime.create(appContext, settings).also {
-                instance = it
-            }
+            GeckoRuntime.create(appContext, settings).also { instance = it }
         }
     }
 }
