@@ -3,7 +3,6 @@ package com.soulbrowser.app
 import android.app.AlertDialog as NativeAlertDialog
 import android.net.Uri
 import android.os.Bundle
-import android.widget.EditText
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
