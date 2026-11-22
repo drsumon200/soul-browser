@@ -12,7 +12,7 @@ internal fun normalizeAddress(raw: String): String {
         value.startsWith("about:", ignoreCase = true)
     ) return value
     val hostLike = value.startsWith("www.", ignoreCase = true) ||
-        value.matches(Regex("(?i)^[a-z0-9-]+(\\.[a-z0-9-]+)+(:[0-9]{1,5})?(/.*)?$"))
+        value.matches(Regex("(?i)^[a-z0-9-]+(\\.[a-z0-9-]+)+(:[0-9]{1,5})?([/?#].*)?$"))
     if (hostLike && !value.contains(" ")) return "https://$value"
     return "https://duckduckgo.com/?q=" + java.net.URLEncoder.encode(value, "UTF-8")
 }

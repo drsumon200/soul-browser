@@ -20,6 +20,10 @@ class BrowserUrlTest {
         assertEquals("https://example.com/path", normalizeAddress("example.com/path"))
     }
 
+    @Test fun hostWithQueryGetsHttps() {
+        assertEquals("https://example.com?x=1", normalizeAddress("example.com?x=1"))
+    }
+
     @Test fun explicitSchemeIsPreserved() {
         assertEquals("http://example.com", normalizeAddress("http://example.com"))
         assertEquals("https://example.com", normalizeAddress("https://example.com"))
