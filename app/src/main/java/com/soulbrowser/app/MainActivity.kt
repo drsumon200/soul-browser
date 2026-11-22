@@ -1,6 +1,8 @@
 package com.soulbrowser.app
 
+import android.app.Activity
 import android.app.AlertDialog as NativeAlertDialog
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.EditText
@@ -65,13 +67,31 @@ private val Lavender = Color(0xFFA7B5FF)
 private val Muted = Color(0xFF9BA0B1)
 
 class MainActivity : ComponentActivity() {
+    private val incomingUrlState = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        incomingUrlState.value = extractIntentUrl(intent)
         val runtime = (application as SoulApplication).geckoRuntime
         setContent {
-            SoulApp(runtime = runtime)
+            SoulApp(
+                runtime = runtime,
+                incomingUrl = incomingUrlState.value,
+                onIncomingUrlConsumed = { incomingUrlState.value = null }
+            )
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        incomingUrlState.value = extractIntentUrl(intent)
+    }
+
+    private fun extractIntentUrl(intent: Intent?): String? =
+        if (intent?.action == Intent.ACTION_VIEW) {
+            intent.dataString?.takeIf { it.startsWith("http", ignoreCase = true) }
+        } else null
 }
 
 private fun sanitizeMimeTypes(raw: Array<String>?): Array<String> {
@@ -100,8 +120,13 @@ private fun extractDownloadFileName(response: WebResponse): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SoulApp(runtime: GeckoRuntime) {
+private fun SoulApp(
+    runtime: GeckoRuntime,
+    incomingUrl: String? = null,
+    onIncomingUrlConsumed: () -> Unit = {}
+) {
     val context = LocalContext.current
+    val activity = context as Activity
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val browserViewModel: BrowserViewModel = viewModel()
@@ -177,6 +202,35 @@ private fun SoulApp(runtime: GeckoRuntime) {
     var tabs by browserViewModel.tabsState
     var bookmarks by browserViewModel.bookmarksState
     var activeTabId by browserViewModel.activeTabIdState
+
+    var settings by remember { mutableStateOf(BrowserSettingsStore.load(context)) }
+    var history by remember { mutableStateOf(HistoryStore.load(context)) }
+    var isFullscreen by remember { mutableStateOf(false) }
+    var showFindBar by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var contextElement by remember { mutableStateOf<GeckoSession.ContentDelegate.ContextElement?>(null) }
+    var secureByTabId by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+    var pendingPermCallback by remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
+
+    val androidPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        pendingPermCallback?.invoke(results.values.all { it })
+        pendingPermCallback = null
+    }
+    val permissionDelegate = remember(context) {
+        SoulPermissionDelegate(
+            context = context,
+            blockAudibleAutoplayProvider = { settings.blockAudibleAutoplay },
+            requestAndroidPermissions = { permissions, callback ->
+                pendingPermCallback = callback
+                androidPermLauncher.launch(permissions)
+            }
+        )
+    }
+    val enhancementHooks = remember { SessionEnhancementHooks() }
 
     var address by remember { mutableStateOf("") }
     var isAddressFocused by remember { mutableStateOf(false) }
@@ -551,7 +605,7 @@ private fun SoulApp(runtime: GeckoRuntime) {
     }
 
     fun submitAddress() {
-        val target = normalizeAddress(address)
+        val target = normalizeAddress(address, settings.searchEngine)
         if (target.isNotBlank()) {
             focusManager.clearFocus()
             keyboardController?.hide()
@@ -564,8 +618,60 @@ private fun SoulApp(runtime: GeckoRuntime) {
     }
     val workspaceTabCount = tabs.count { it.workspaceId == activeWorkspace.id }
 
-    BackHandler(enabled = activeTab?.canGoBack == true) {
-        activeTab?.session?.goBack()
+    SideEffect {
+        enhancementHooks.onFullScreen = { full ->
+            isFullscreen = full
+            BrowserActions.setImmersiveFullscreen(activity, full)
+        }
+        enhancementHooks.onContextMenu = { element -> contextElement = element }
+        enhancementHooks.onSecurityChange = { id, secure ->
+            secureByTabId = secureByTabId + (id to secure)
+        }
+        enhancementHooks.onCloseRequest = { id ->
+            tabs.firstOrNull { it.id == id }?.session?.close()
+            tabs = tabs.filterNot { it.id == id }
+            browserViewModel.persistCurrentTabs()
+        }
+        enhancementHooks.onCrashRecover = { id, session ->
+            tabs.firstOrNull { it.id == id }?.url
+                ?.takeIf { it != "about:blank" }
+                ?.let { runCatching { session.open(runtime); session.loadUri(it) } }
+        }
+        enhancementHooks.onExternalScheme = { uri -> BrowserActions.openExternalUri(context, uri) }
+        enhancementHooks.onHistoryRecord = { id, url, title ->
+            val tab = tabs.firstOrNull { it.id == id }
+            val isPrivate = containers.firstOrNull { it.id == tab?.containerId }?.isPrivate == true
+            history = HistoryStore.record(context, url, title ?: tab?.title, isPrivate)
+        }
+    }
+
+    LaunchedEffect(activeTab?.id, activeTab?.session) {
+        val tab = activeTab ?: return@LaunchedEffect
+        val session = tab.session ?: return@LaunchedEffect
+        BrowserSessionEnhancer.attach(
+            activity = activity,
+            runtime = runtime,
+            tabId = tab.id,
+            session = session,
+            permissionDelegate = permissionDelegate,
+            desktopModeDefault = settings.desktopModeDefault,
+            hooks = enhancementHooks
+        )
+    }
+
+    LaunchedEffect(incomingUrl) {
+        if (!incomingUrl.isNullOrBlank()) {
+            createTab(url = incomingUrl)
+            onIncomingUrlConsumed()
+        }
+    }
+
+    BackHandler(enabled = isFullscreen || showFindBar || activeTab?.canGoBack == true) {
+        when {
+            isFullscreen -> activeTab?.session?.exitFullScreen()
+            showFindBar -> showFindBar = false
+            else -> activeTab?.session?.goBack()
+        }
     }
 
     // Keep address bar synced when switching tabs, workspaces, or after rotation.
@@ -788,6 +894,13 @@ private fun SoulApp(runtime: GeckoRuntime) {
                     )
                 }
 
+                if (showFindBar) {
+                    FindInPageBar(
+                        session = activeTab?.session,
+                        onClose = { showFindBar = false }
+                    )
+                }
+
                 // Floating bottom navigation, compact and thumb-friendly.
                 Row(
                     Modifier
@@ -870,11 +983,72 @@ private fun SoulApp(runtime: GeckoRuntime) {
                     IconButton(onClick = { createTab() }) {
                         Icon(Icons.Default.Add, "New tab", tint = Lavender)
                     }
+                    IconButton(onClick = { showMoreMenu = true }) {
+                        Icon(Icons.Default.MoreVert, "More browser options", tint = Color.White)
+                    }
                     IconButton(onClick = { showTabs = true }) {
                         Icon(Icons.Default.GridView, "Tab overview", tint = Color.White)
                     }
                 }
             }
+        }
+
+        if (showMoreMenu) {
+            BrowserMoreMenuDialog(
+                isDesktopMode = BrowserActions.isDesktopMode(activeTab?.session),
+                isCompactMode = settings.compactMode,
+                hasActivePage = activeTab != null && activeTab.url != "about:blank",
+                onToggleDesktopMode = { BrowserActions.setDesktopMode(activeTab?.session, !BrowserActions.isDesktopMode(activeTab?.session)) },
+                onToggleCompactMode = {
+                    settings = settings.copy(compactMode = !settings.compactMode)
+                    BrowserSettingsStore.save(context, settings)
+                },
+                onFindInPage = { showFindBar = true },
+                onShare = { activeTab?.let { BrowserActions.shareUrl(context, it.url, it.title) } },
+                onCopyUrl = { activeTab?.let { BrowserActions.copyToClipboard(context, it.url) } },
+                onOpenHistory = { history = HistoryStore.load(context); showHistory = true },
+                onOpenSettings = { showSettings = true },
+                onDismiss = { showMoreMenu = false }
+            )
+        }
+
+        if (showHistory) {
+            BrowserHistoryDialog(
+                entries = history,
+                onOpenUrl = { navigateTo(it) },
+                onDeleteEntry = { history = HistoryStore.remove(context, it) },
+                onClearAll = { history = HistoryStore.clear(context) },
+                onDismiss = { showHistory = false }
+            )
+        }
+
+        if (showSettings) {
+            BrowserSettingsDialog(
+                settings = settings,
+                onUpdate = {
+                    settings = it
+                    BrowserSettingsStore.save(context, it)
+                },
+                onDismiss = { showSettings = false }
+            )
+        }
+
+        contextElement?.let { element ->
+            BrowserContextMenuDialog(
+                element = element,
+                onOpenNewTab = { createTab(it) },
+                onOpenPrivateTab = { url ->
+                    val privateContainer = containers.firstOrNull { it.isPrivate }
+                        ?: BrowserContainer(name = "Private", color = 0xFFED8796, isPrivate = true).also {
+                            containers = containers + it
+                            SoulStore.saveContainers(context, containers)
+                        }
+                    createTab(url = url, containerOverride = privateContainer)
+                },
+                onCopyUrl = { BrowserActions.copyToClipboard(context, it) },
+                onShareUrl = { BrowserActions.shareUrl(context, it) },
+                onDismiss = { contextElement = null }
+            )
         }
 
         if (showTabs) {
