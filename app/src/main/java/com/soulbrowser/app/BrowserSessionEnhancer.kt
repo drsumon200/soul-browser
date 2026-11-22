@@ -26,6 +26,7 @@ class SessionEnhancementHooks(
  */
 object BrowserSessionEnhancer {
     private val wrappedSessions = WeakHashMap<GeckoSession, Boolean>()
+    private val hooksBySession = WeakHashMap<GeckoSession, SessionEnhancementHooks>()
 
     @Synchronized
     fun attach(
@@ -40,9 +41,9 @@ object BrowserSessionEnhancer {
     ) {
         session.permissionDelegate = permissionDelegate
         session.settings.useTrackingProtection = trackingProtection
-        if (wrappedSessions[session] == true) return
-
+        hooksBySession[session] = hooks
         session.selectionActionDelegate = BasicSelectionActionDelegate(activity)
+        if (wrappedSessions[session] == true) return
         if (desktopModeDefault) BrowserActions.setDesktopMode(session, true)
 
         var lastTitle: String? = null
@@ -59,7 +60,7 @@ object BrowserSessionEnhancer {
             }
 
             override fun onFullScreen(s: GeckoSession, fullScreen: Boolean) {
-                hooks.onFullScreen(fullScreen)
+                hooksBySession[s]?.onFullScreen?.invoke(fullScreen)
                 baseContent?.onFullScreen(s, fullScreen)
             }
 
@@ -69,17 +70,17 @@ object BrowserSessionEnhancer {
                 screenY: Int,
                 element: GeckoSession.ContentDelegate.ContextElement
             ) {
-                hooks.onContextMenu(element)
+                hooksBySession[s]?.onContextMenu?.invoke(element)
                 baseContent?.onContextMenu(s, screenX, screenY, element)
             }
 
             override fun onCloseRequest(s: GeckoSession) {
-                hooks.onCloseRequest(tabId)
+                hooksBySession[s]?.onCloseRequest?.invoke(tabId)
                 baseContent?.onCloseRequest(s)
             }
 
             override fun onCrash(s: GeckoSession) {
-                hooks.onCrashRecover(tabId, s)
+                hooksBySession[s]?.onCrashRecover?.invoke(tabId, s)
                 baseContent?.onCrash(s)
             }
         }
@@ -102,7 +103,7 @@ object BrowserSessionEnhancer {
                 s: GeckoSession,
                 securityInfo: GeckoSession.ProgressDelegate.SecurityInformation
             ) {
-                hooks.onSecurityChange(tabId, securityInfo.isSecure)
+                hooksBySession[s]?.onSecurityChange?.invoke(tabId, securityInfo.isSecure)
                 baseProgress?.onSecurityChange(s, securityInfo)
             }
         }
@@ -125,7 +126,7 @@ object BrowserSessionEnhancer {
             ) {
                 baseNavigation?.onLocationChange(s, url, perms, hasUserGesture)
                 if (!url.isNullOrBlank() && url.startsWith("http", ignoreCase = true)) {
-                    hooks.onHistoryRecord(tabId, url, lastTitle)
+                    hooksBySession[s]?.onHistoryRecord?.invoke(tabId, url, lastTitle)
                 }
             }
 
@@ -138,7 +139,7 @@ object BrowserSessionEnhancer {
                 request: GeckoSession.NavigationDelegate.LoadRequest
             ): GeckoResult<AllowOrDeny> {
                 if (isExternalAppUri(request.uri)) {
-                    hooks.onExternalScheme(request.uri)
+                    hooksBySession[s]?.onExternalScheme?.invoke(request.uri)
                     return GeckoResult.deny()
                 }
                 return baseNavigation?.onLoadRequest(s, request) ?: GeckoResult.allow()
