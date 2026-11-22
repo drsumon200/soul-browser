@@ -64,15 +64,6 @@ private data class PendingFilePrompt(
     val result: GeckoResult<GeckoSession.PromptDelegate.PromptResponse>
 )
 
-private data class SoulTab(
-    val id: String,
-    val title: String,
-    val url: String,
-    val session: GeckoSession?,
-    val workspaceId: String,
-    val containerId: String
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SoulApp(runtime: GeckoRuntime) {
@@ -109,13 +100,13 @@ private fun SoulApp(runtime: GeckoRuntime) {
             body?.close()
         }
     }
-    var containers by remember { mutableStateOf(SoulStore.loadContainers(context)) }
-    var workspaces by remember { mutableStateOf(SoulStore.loadWorkspaces(context, containers.first().id)) }
-    var activeContainer by remember { mutableStateOf(containers.first()) }
-    var activeWorkspace by remember { mutableStateOf(workspaces.first()) }
-    var tabs by remember { mutableStateOf(listOf<SoulTab>()) }
-    var bookmarks by remember { mutableStateOf(SoulStore.loadBookmarks(context)) }
-    var activeTabId by remember { mutableStateOf<String?>(null) }
+    var containers by browserViewModel.containersState
+    var workspaces by browserViewModel.workspacesState
+    var activeContainer by browserViewModel.activeContainerState
+    var activeWorkspace by browserViewModel.activeWorkspaceState
+    var tabs by browserViewModel.tabsState
+    var bookmarks by browserViewModel.bookmarksState
+    var activeTabId by browserViewModel.activeTabIdState
     var canNavigateBack by remember { mutableStateOf(false) }
     var canNavigateForward by remember { mutableStateOf(false) }
     var address by remember { mutableStateOf("") }

@@ -96,6 +96,16 @@ object SoulStore {
 }
 
 
+
+data class SoulTab(
+    val id: String,
+    val title: String,
+    val url: String,
+    val session: org.mozilla.geckoview.GeckoSession?,
+    val workspaceId: String,
+    val containerId: String
+)
+
 data class SavedTab(val id: String, val title: String, val url: String, val workspaceId: String, val containerId: String)
 
 data class BrowserBookmark(val url: String, val title: String)
