@@ -56,6 +56,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    testImplementation("junit:junit:4.13.2")
 
     // GeckoView stable release compatible with Android API 36.
     implementation("org.mozilla.geckoview:geckoview:150.0.20260506140522")

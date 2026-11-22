@@ -32,7 +32,7 @@ object SoulStore {
             (0 until array.length()).map { i ->
                 val o = array.getJSONObject(i)
                 BrowserContainer(o.getString("id"), o.getString("name"), o.getLong("color"), o.optBoolean("private", false))
-            }
+            }.ifEmpty { listOf(BrowserContainer(id = "personal", name = "Personal", color = 0xFF9BA8FF)) }
         }.getOrDefault(listOf(BrowserContainer(id = "personal", name = "Personal", color = 0xFF9BA8FF)))
     }
 
@@ -50,7 +50,7 @@ object SoulStore {
             (0 until array.length()).map { i ->
                 val o = array.getJSONObject(i)
                 BrowserWorkspace(o.getString("id"), o.getString("name"), o.getString("containerId"))
-            }
+            }.ifEmpty { listOf(BrowserWorkspace(id = "general", name = "General", containerId = defaultContainerId)) }
         }.getOrDefault(listOf(BrowserWorkspace(id = "general", name = "General", containerId = defaultContainerId)))
     }
 

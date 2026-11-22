@@ -51,6 +51,9 @@ jobs:
           test -f app/build.gradle.kts
           test -f app/src/main/AndroidManifest.xml
 
+      - name: Run unit tests
+        run: gradle --no-daemon testDebugUnitTest --stacktrace
+
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug --stacktrace
 

@@ -6,39 +6,55 @@ Soul Browser is a Zen-inspired Android browser prototype using Kotlin, Jetpack C
 
 Repository: https://github.com/drsumon200/soul-browser
 
-## Current prototype scope
-- Dark, compact, rounded UI inspired by Zen Browser's design language.
-- GeckoView-based web rendering.
-- Workspaces to group tabs.
-- Inactive sessions request media suspension to reduce background work.
-- Named containers mapped to GeckoView `GeckoSessionSettings.contextId`, which partitions cookies and web storage between contexts.
-- Private containers use GeckoView private mode and are excluded from saved tab metadata. Bookmark creation is disabled while a private-container tab is active.
-- Workspace default-container selection is remembered.
-- Basic navigation, tab overview, quick links, local bookmarks and tracking protection enabled by default.
-- Basic tab restoration: regular tabs' URL/title/workspace/container metadata is saved locally and reopened on next launch.
+## Implemented
 
-## Development status
-This is an early alpha prototype, not a release-ready browser. The UI is an original Jetpack Compose implementation inspired by Zen's interaction patterns. It is not an official Zen Browser build and does not yet contain merged code from the upstream Zen Android port. The public port is available at https://github.com/ApoBen/Zen-Android and is licensed MPL-2.0; any future code reuse must preserve its notices and comply with that license.
+- GeckoView rendering with a process-scoped GeckoRuntime owned by SoulApplication.
+- Workspaces that group tabs and remember a default container.
+- Named containers mapped to GeckoSessionSettings.contextId for cookie and web-storage isolation.
+- Private containers use GeckoView private mode. Private tab metadata and URLs are excluded from persistent tab storage.
+- Lazy tab restoration: startup restores regular-tab metadata only; GeckoSession is opened only when a tab is activated.
+- Safe GeckoView session handoff using releaseSession before attaching a different session.
+- Back navigation follows GeckoView NavigationDelegate can-go-back state.
+- Address-bar URL detection and DuckDuckGo search fallback for plain text.
+- JavaScript alert and confirm prompts, HTML select prompts, single/multiple file pickers.
+- Download response handling through GeckoView ContentDelegate and Android's document save picker.
+- Per-container site-data clearing closes that container's sessions before calling StorageController.clearDataForSessionContext.
+- BrowserViewModel owns core tab/workspace/container/bookmark state and debounces tab metadata writes by 500 ms.
+- Thumb-friendly bottom navigation: horizontal swipe switches workspaces and upward swipe opens the tab drawer.
+- Tracking protection enabled by default; background sessions are deactivated and media suspension requested.
 
-The prototype includes GeckoView rendering, workspace-scoped tabs, named containers backed by GeckoView context IDs, private containers, tracking protection defaults, navigation controls, and reduced activity for background tabs. Regular tab URL/title/workspace/container metadata is persisted and restored; private tab URLs are deliberately not persisted. This is metadata-based restoration, not full browser-history/scroll/form-state restoration. It has not been compiled or tested on a physical Honor 200. Downloads, history, extension management, content/ad blocking lists, container deletion/cleanup, robust tab lifecycle, and production security review remain outstanding. Bookmarks are stored locally as URL/title pairs. Private-container pages cannot be added to bookmarks from the browser UI.
+## Current limitations
 
-The workspace, container and regular-tab metadata is persisted locally. Container isolation uses GeckoView's documented context ID API: sessions sharing a context ID share cookies and localStorage, while different IDs partition that storage. A workspace is a tab collection with a default container; tabs can still be opened in another container. Private containers use GeckoView private mode and their tab metadata is not written to preferences. Clearing or deleting a persistent container's underlying Gecko storage is not implemented yet.
+This remains an alpha prototype, not a release-ready browser. It has not yet been tested on a physical Honor 200. Automated CI builds validate compilation and unit tests, but do not replace device testing.
+
+- Session restoration is metadata-based. It reopens URLs, not full page history, scroll position, form state, or live JavaScript state.
+- Folder upload prompts are currently dismissed; single and multiple file selection are supported.
+- Download save flow depends on the Android document picker and has not been device-tested for every MIME type or large-file edge case.
+- Authentication, date/time, color, WebAuthn, WebExtension management, history UI, content-blocking lists, and robust popup/new-window tab routing remain future work.
+- Container cleanup clears cookies and storage for the selected Gecko session context after closing its open tabs. It does not delete the container definition.
+- Bookmarks and browser metadata are stored in local SharedPreferences; bookmark encryption and migration to Room/DataStore are not implemented.
+- Release signing, Play Store packaging, accessibility review, security audit, and broad automated UI tests are outstanding.
+
+The UI is an original Jetpack Compose implementation inspired by Zen Browser's interaction patterns. It is not an official Zen Browser build or a direct port of desktop frontend code. The project is not affiliated with Mozilla or the Zen Browser team.
 
 ## Build
-Requirements: Android Studio, JDK 17, Android SDK 35, Gradle 8.11.1. The first device target is Honor 200 (arm64-v8a), so the initial APK is ABI-filtered for 64-bit ARM.
+
+Requirements: JDK 17, Android SDK Platform 36, Build Tools 36.0.0 and Gradle 8.13. The initial device target is Honor 200 (arm64-v8a), so the APK is currently ABI-filtered for 64-bit ARM.
 
 ```bash
+gradle testDebugUnitTest
 gradle assembleDebug
 ```
 
 APK output: `app/build/outputs/apk/debug/app-debug.apk`.
 
-A GitHub Actions workflow is included at `.github/workflows/build-apk.yml`. Push the `main` branch to `drsumon200/soul-browser` to trigger an APK build, or run the workflow manually from the Actions tab. The workflow publishes the debug APK as a downloadable artifact. A successful build has not yet been verified in this development environment.
+GitHub Actions runs unit tests before assembling the debug APK and publishes the APK as a downloadable artifact.
 
-## Upstream references and licensing
+## Licensing and references
+
+- GeckoView: https://mozilla.github.io/geckoview/ (MPL-2.0)
+- GeckoView context isolation API: https://mozilla.github.io/geckoview/javadoc/mozilla-central/org/mozilla/geckoview/GeckoSessionSettings.Builder.html
 - Zen Browser desktop: https://github.com/zen-browser/desktop (MPL-2.0)
 - Unofficial Zen Android exploration: https://github.com/ApoBen/Zen-Android (MPL-2.0)
-- GeckoView context isolation API: https://mozilla.github.io/geckoview/javadoc/mozilla-central/org/mozilla/geckoview/GeckoSessionSettings.Builder.html
-- GeckoView: https://mozilla.github.io/geckoview/ (MPL-2.0)
 
-This project is not affiliated with the Zen Browser or Mozilla teams. The current UI is an original Android implementation inspired by Zen's interaction patterns, not a direct port of desktop frontend code.
+Any future code reuse from MPL-2.0 projects must preserve notices and comply with that license.

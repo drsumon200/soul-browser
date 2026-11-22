@@ -650,12 +650,3 @@ private fun QuickLink(title: String, url: String, onOpen: (String) -> Unit) {
         Text(title, Modifier.padding(horizontal = 14.dp, vertical = 11.dp), color = Color.White, fontSize = 12.sp)
     }
 }
-
-private fun normalizeAddress(raw: String): String {
-    val value = raw.trim()
-    if (value.isBlank()) return ""
-    if (value.contains(" ")) return "https://www.google.com/search?q=" + java.net.URLEncoder.encode(value, "UTF-8")
-    if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("about:")) return value
-    if (value.startsWith("www.", ignoreCase = true) || value.matches(Regex("(?i)^[a-z0-9-]+(\\.[a-z0-9-]+)+(:[0-9]{1,5})?(/.*)?$"))) return "https://$value"
-    return "https://www.google.com/search?q=" + java.net.URLEncoder.encode(value, "UTF-8")
-}
