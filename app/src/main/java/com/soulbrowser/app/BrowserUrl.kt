@@ -11,6 +11,7 @@ private val IPV4_PATTERN = Regex(
     """^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?::\d{1,5})?(?:[/?#].*)?$"""
 )
 private val LOCALHOST_PATTERN = Regex("""(?i)^localhost:\d{1,5}(?:[/?#].*)?$""")
+private val IPV4_LIKE_PATTERN = Regex("""^\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?(?:[/?#].*)?$""")
 private val DOMAIN_PATTERN = Regex(
     """(?i)^(?:www\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?::\d{1,5})?(?:[/?#].*)?$"""
 )
@@ -30,6 +31,9 @@ internal fun normalizeAddress(
     if (!value.any(Char::isWhitespace)) {
         if (LOCALHOST_PATTERN.matches(value) || IPV4_PATTERN.matches(value)) {
             return "http://$value"
+        }
+        if (IPV4_LIKE_PATTERN.matches(value)) {
+            return engine.queryPrefix + URLEncoder.encode(value, "UTF-8")
         }
         if (DOMAIN_PATTERN.matches(value)) {
             return "https://$value"
