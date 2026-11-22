@@ -28,6 +28,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardActions
+import androidx.compose.ui.text.input.KeyboardOptions
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -374,6 +377,14 @@ private fun SoulApp(runtime: GeckoRuntime) {
                         onValueChange = { address = it },
                         modifier = Modifier.weight(1f).padding(vertical = 12.dp),
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            val target = normalizeAddress(address)
+                            if (target.isNotBlank()) {
+                                navigateTo(target)
+                                address = target
+                            }
+                        }),
                         textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp),
                         decorationBox = { inner -> if (address.isEmpty()) Text("Search or enter address", color = Muted, fontSize = 14.sp); inner() }
                     )
