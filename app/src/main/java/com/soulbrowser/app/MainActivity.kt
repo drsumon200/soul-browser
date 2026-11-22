@@ -172,6 +172,18 @@ private fun SoulApp(runtime: GeckoRuntime) {
         address = if (url == "about:blank") "" else url
     }
 
+    fun navigateTo(targetUrl: String) {
+        val selectedId = activeTabId
+        val selectedTab = tabs.firstOrNull { it.id == selectedId && it.workspaceId == activeWorkspace.id }
+        if (selectedTab == null) {
+            createTab(targetUrl)
+        } else {
+            tabs = tabs.map { tab -> if (tab.id == selectedTab.id) tab.copy(url = targetUrl) else tab }
+            ensureSession(selectedTab.id)
+            address = targetUrl
+        }
+    }
+
     val activeTab = tabs.firstOrNull { it.id == activeTabId && it.workspaceId == activeWorkspace.id }
     BackHandler(enabled = canNavigateBack) {
         activeTab?.session?.goBack()
@@ -251,7 +263,7 @@ private fun SoulApp(runtime: GeckoRuntime) {
                     IconButton(onClick = {
                         val target = normalizeAddress(address)
                         if (target.isNotBlank()) {
-                            if (activeTab == null) createTab(target) else activeTab.session.loadUri(target)
+                            navigateTo(target)
                             address = target
                         }
                     }) { Icon(Icons.Default.ArrowForward, "Go", tint = Lavender) }
@@ -261,7 +273,7 @@ private fun SoulApp(runtime: GeckoRuntime) {
                 if (activeTab == null || activeTab.session == null || activeTab.url == "about:blank") {
                     HomePanel(
                         activeContainer = activeContainer,
-                        onOpen = { address = it; val target = normalizeAddress(it); if (activeTab == null) createTab(target) else activeTab.session.loadUri(target); address = target },
+                        onOpen = { address = it; val target = normalizeAddress(it); navigateTo(target); address = target },
                         onNewTab = { createTab() }
                     )
                 } else {
@@ -368,7 +380,7 @@ private fun SoulApp(runtime: GeckoRuntime) {
                     items(bookmarks, key = { it.url }) { item ->
                         Row(Modifier.fillMaxWidth().clickable {
                             val tab = activeTab
-                            if (tab == null) createTab(item.url) else tab.session.loadUri(item.url)
+                            navigateTo(item.url)
                             address = item.url
                             showBookmarks = false
                         }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
