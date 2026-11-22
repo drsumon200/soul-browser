@@ -3,14 +3,17 @@ package com.soulbrowser.app
 import android.app.AlertDialog as NativeAlertDialog
 import android.net.Uri
 import android.os.Bundle
+import android.widget.EditText
+import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,29 +23,38 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
 import org.mozilla.geckoview.WebResponse
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import java.net.URLDecoder
 import java.util.UUID
 import kotlin.math.abs
 
@@ -56,46 +68,108 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val runtime = (application as SoulApplication).geckoRuntime
-        setContent { SoulApp(runtime = runtime) }
+        setContent {
+            SoulApp(runtime = runtime)
+        }
     }
+}
+
+private fun sanitizeMimeTypes(raw: Array<String>?): Array<String> {
+    if (raw.isNullOrEmpty()) return arrayOf("*/*")
+    val valid = raw.map { it.trim() }.filter { it.contains("/") && it.length >= 3 }
+    return if (valid.isEmpty()) arrayOf("*/*") else valid.toTypedArray()
+}
+
+private fun extractDownloadFileName(response: WebResponse): String {
+    val contentDisposition = response.headers.entries
+        .firstOrNull { it.key.equals("content-disposition", ignoreCase = true) }
+        ?.value
+    val fromHeader = contentDisposition?.let { header ->
+        Regex("""filename\*?=(?:UTF-8'')?"?([^";\r\n]+)"?""", RegexOption.IGNORE_CASE)
+            .find(header)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
+    }
+    val rawName = fromHeader ?: Uri.parse(response.uri).lastPathSegment
+    return rawName
+        ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        ?.takeIf { it.isNotBlank() }
+        ?: "download"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SoulApp(runtime: GeckoRuntime) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val browserViewModel: BrowserViewModel = viewModel()
     val coroutineScope = rememberCoroutineScope()
+
     var pendingFilePrompt by browserViewModel.pendingFilePromptState
     var pendingDownload by browserViewModel.pendingDownloadState
-    val singleFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+
+    val singleFilePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
         pendingFilePrompt?.let { pending ->
-            pending.result.complete(uri?.let { pending.prompt.confirm(context.applicationContext, it) } ?: pending.prompt.dismiss())
+            if (!pending.prompt.isComplete) {
+                pending.result.complete(
+                    uri?.let { pending.prompt.confirm(context.applicationContext, it) }
+                        ?: pending.prompt.dismiss()
+                )
+            }
         }
         pendingFilePrompt = null
     }
-    val multipleFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+
+    val multipleFilePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
         pendingFilePrompt?.let { pending ->
-            pending.result.complete(if (uris.isNotEmpty()) pending.prompt.confirm(context.applicationContext, uris.toTypedArray()) else pending.prompt.dismiss())
+            if (!pending.prompt.isComplete) {
+                pending.result.complete(
+                    if (uris.isNotEmpty()) {
+                        pending.prompt.confirm(context.applicationContext, uris.toTypedArray())
+                    } else {
+                        pending.prompt.dismiss()
+                    }
+                )
+            }
         }
         pendingFilePrompt = null
     }
-    val downloadPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { destination ->
+
+    val downloadPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { destination ->
         val response = pendingDownload
         pendingDownload = null
         val body = response?.body
         if (destination != null && body != null) {
             coroutineScope.launch(Dispatchers.IO) {
-                runCatching {
+                val result = runCatching {
                     val output = context.contentResolver.openOutputStream(destination)
-                    if (output != null) output.use { sink -> body.use { source -> source.copyTo(sink) } }
-                    else body.close()
-                }.onFailure { runCatching { body.close() } }
+                    if (output != null) {
+                        output.use { sink ->
+                            body.use { source -> source.copyTo(sink) }
+                        }
+                    } else {
+                        body.close()
+                        error("Unable to open destination stream")
+                    }
+                }
+                withContext(Dispatchers.Main) {
+                    val msg = if (result.isSuccess) "Download saved" else "Download failed"
+                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                }
             }
         } else {
-            body?.close()
+            runCatching { body?.close() }
         }
     }
+
     var containers by browserViewModel.containersState
     var workspaces by browserViewModel.workspacesState
     var activeContainer by browserViewModel.activeContainerState
@@ -103,9 +177,9 @@ private fun SoulApp(runtime: GeckoRuntime) {
     var tabs by browserViewModel.tabsState
     var bookmarks by browserViewModel.bookmarksState
     var activeTabId by browserViewModel.activeTabIdState
-    var canNavigateBack by remember { mutableStateOf(false) }
-    var canNavigateForward by remember { mutableStateOf(false) }
+
     var address by remember { mutableStateOf("") }
+    var isAddressFocused by remember { mutableStateOf(false) }
     var showTabs by remember { mutableStateOf(false) }
     var showSpaces by remember { mutableStateOf(false) }
     var showContainers by remember { mutableStateOf(false) }
@@ -115,92 +189,139 @@ private fun SoulApp(runtime: GeckoRuntime) {
     var newName by remember { mutableStateOf("") }
     var newContainerPrivate by remember { mutableStateOf(false) }
 
-    fun persistTabs() {
-        // Never persist private tabs or their URLs to app preferences.
-        browserViewModel.persistTabs(
-            tabs.filterNot { tab -> containers.firstOrNull { it.id == tab.containerId }?.isPrivate == true }
-                .map { SavedTab(it.id, it.title, it.url, it.workspaceId, it.containerId) }
-        )
-    }
-
-    val browserPromptDelegate = remember {
+    val browserPromptDelegate = remember(context) {
         object : GeckoSession.PromptDelegate {
-                override fun onAlertPrompt(
-                    session: GeckoSession,
-                    prompt: GeckoSession.PromptDelegate.AlertPrompt
-                ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
-                    val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
-                    NativeAlertDialog.Builder(context)
-                        .setTitle(prompt.title ?: "Website message")
-                        .setMessage(prompt.message.orEmpty())
-                        .setPositiveButton(android.R.string.ok) { _, _ -> result.complete(prompt.dismiss()) }
-                        .setOnCancelListener { if (!prompt.isComplete) result.complete(prompt.dismiss()) }
-                        .show()
-                    return result
-                }
+            override fun onAlertPrompt(
+                session: GeckoSession,
+                prompt: GeckoSession.PromptDelegate.AlertPrompt
+            ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
+                val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                NativeAlertDialog.Builder(context)
+                    .setTitle(prompt.title ?: "Website message")
+                    .setMessage(prompt.message.orEmpty())
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        if (!prompt.isComplete) result.complete(prompt.dismiss())
+                    }
+                    .setOnCancelListener {
+                        if (!prompt.isComplete) result.complete(prompt.dismiss())
+                    }
+                    .show()
+                return result
+            }
 
-                override fun onButtonPrompt(
-                    session: GeckoSession,
-                    prompt: GeckoSession.PromptDelegate.ButtonPrompt
-                ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
-                    val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
-                    NativeAlertDialog.Builder(context)
-                        .setTitle(prompt.title ?: "Website confirmation")
-                        .setMessage(prompt.message.orEmpty())
+            override fun onButtonPrompt(
+                session: GeckoSession,
+                prompt: GeckoSession.PromptDelegate.ButtonPrompt
+            ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
+                val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                NativeAlertDialog.Builder(context)
+                    .setTitle(prompt.title ?: "Website confirmation")
+                    .setMessage(prompt.message.orEmpty())
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        if (!prompt.isComplete) {
+                            result.complete(
+                                prompt.confirm(GeckoSession.PromptDelegate.ButtonPrompt.Type.POSITIVE)
+                            )
+                        }
+                    }
+                    .setNegativeButton(android.R.string.cancel) { _, _ ->
+                        if (!prompt.isComplete) {
+                            result.complete(
+                                prompt.confirm(GeckoSession.PromptDelegate.ButtonPrompt.Type.NEGATIVE)
+                            )
+                        }
+                    }
+                    .setOnCancelListener {
+                        if (!prompt.isComplete) result.complete(prompt.dismiss())
+                    }
+                    .show()
+                return result
+            }
+
+            override fun onTextPrompt(
+                session: GeckoSession,
+                prompt: GeckoSession.PromptDelegate.TextPrompt
+            ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
+                val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                val input = EditText(context).apply {
+                    setText(prompt.defaultValue.orEmpty())
+                    setSingleLine(true)
+                }
+                NativeAlertDialog.Builder(context)
+                    .setTitle(prompt.title ?: "Website prompt")
+                    .setMessage(prompt.message.orEmpty())
+                    .setView(input)
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        if (!prompt.isComplete) result.complete(prompt.confirm(input.text.toString()))
+                    }
+                    .setNegativeButton(android.R.string.cancel) { _, _ ->
+                        if (!prompt.isComplete) result.complete(prompt.dismiss())
+                    }
+                    .setOnCancelListener {
+                        if (!prompt.isComplete) result.complete(prompt.dismiss())
+                    }
+                    .show()
+                return result
+            }
+
+            override fun onChoicePrompt(
+                session: GeckoSession,
+                prompt: GeckoSession.PromptDelegate.ChoicePrompt
+            ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
+                val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                val choices = prompt.choices.filter { !it.disabled && !it.separator && it.items == null }
+                if (choices.isEmpty()) return GeckoResult.fromValue(prompt.dismiss())
+                val labels = choices.map { it.label }.toTypedArray()
+                val builder = NativeAlertDialog.Builder(context)
+                    .setTitle(prompt.title ?: "Choose an option")
+                    .setOnCancelListener {
+                        if (!prompt.isComplete) result.complete(prompt.dismiss())
+                    }
+                if (prompt.type == GeckoSession.PromptDelegate.ChoicePrompt.Type.MULTIPLE) {
+                    val checked = BooleanArray(choices.size) { choices[it].selected }
+                    builder
+                        .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
+                            checked[which] = isChecked
+                        }
                         .setPositiveButton(android.R.string.ok) { _, _ ->
-                            result.complete(prompt.confirm(GeckoSession.PromptDelegate.ButtonPrompt.Type.POSITIVE))
+                            if (!prompt.isComplete) {
+                                result.complete(
+                                    prompt.confirm(
+                                        choices.filterIndexed { index, _ -> checked[index] }.toTypedArray()
+                                    )
+                                )
+                            }
                         }
                         .setNegativeButton(android.R.string.cancel) { _, _ ->
-                            result.complete(prompt.confirm(GeckoSession.PromptDelegate.ButtonPrompt.Type.NEGATIVE))
+                            if (!prompt.isComplete) result.complete(prompt.dismiss())
                         }
-                        .setOnCancelListener { if (!prompt.isComplete) result.complete(prompt.dismiss()) }
-                        .show()
-                    return result
-                }
-
-                override fun onChoicePrompt(
-                    session: GeckoSession,
-                    prompt: GeckoSession.PromptDelegate.ChoicePrompt
-                ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
-                    val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
-                    val choices = prompt.choices.filter { !it.disabled && !it.separator && it.items == null }
-                    if (choices.isEmpty()) return GeckoResult.fromValue(prompt.dismiss())
-                    val labels = choices.map { it.label }.toTypedArray()
-                    val builder = NativeAlertDialog.Builder(context)
-                        .setTitle(prompt.title ?: "Choose an option")
-                        .setOnCancelListener { if (!prompt.isComplete) result.complete(prompt.dismiss()) }
-                    if (prompt.type == GeckoSession.PromptDelegate.ChoicePrompt.Type.MULTIPLE) {
-                        val checked = BooleanArray(choices.size) { choices[it].selected }
-                        builder.setMultiChoiceItems(labels, checked) { _, which, isChecked -> checked[which] = isChecked }
-                            .setPositiveButton(android.R.string.ok) { _, _ ->
-                                result.complete(prompt.confirm(choices.filterIndexed { index, _ -> checked[index] }.toTypedArray()))
-                            }
-                            .setNegativeButton(android.R.string.cancel) { _, _ -> result.complete(prompt.dismiss()) }
-                    } else {
-                        builder.setItems(labels) { _, which -> result.complete(prompt.confirm(choices[which])) }
+                } else {
+                    builder.setItems(labels) { _, which ->
+                        if (!prompt.isComplete) result.complete(prompt.confirm(choices[which]))
                     }
-                    builder.show()
-                    return result
                 }
-
-                override fun onFilePrompt(
-                    session: GeckoSession,
-                    prompt: GeckoSession.PromptDelegate.FilePrompt
-                ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
-                    if (prompt.type == GeckoSession.PromptDelegate.FilePrompt.Type.FOLDER) {
-                        return GeckoResult.fromValue(prompt.dismiss())
-                    }
-                    val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
-                    pendingFilePrompt = PendingFilePrompt(prompt, result)
-                    val mimeTypes = prompt.mimeTypes ?: arrayOf("*/*")
-                    if (prompt.type == GeckoSession.PromptDelegate.FilePrompt.Type.MULTIPLE) {
-                        multipleFilePicker.launch(mimeTypes)
-                    } else {
-                        singleFilePicker.launch(mimeTypes)
-                    }
-                    return result
-                }
+                builder.show()
+                return result
             }
+
+            override fun onFilePrompt(
+                session: GeckoSession,
+                prompt: GeckoSession.PromptDelegate.FilePrompt
+            ): GeckoResult<GeckoSession.PromptDelegate.PromptResponse> {
+                if (prompt.type == GeckoSession.PromptDelegate.FilePrompt.Type.FOLDER) {
+                    return GeckoResult.fromValue(prompt.dismiss())
+                }
+                val result = GeckoResult<GeckoSession.PromptDelegate.PromptResponse>()
+                pendingFilePrompt = PendingFilePrompt(prompt, result)
+                val mimeTypes = sanitizeMimeTypes(prompt.mimeTypes)
+                if (prompt.type == GeckoSession.PromptDelegate.FilePrompt.Type.MULTIPLE) {
+                    multipleFilePicker.launch(mimeTypes)
+                } else {
+                    singleFilePicker.launch(mimeTypes)
+                }
+                return result
+            }
+        }
     }
 
     DisposableEffect(browserViewModel, browserPromptDelegate) {
@@ -208,28 +329,98 @@ private fun SoulApp(runtime: GeckoRuntime) {
         browserViewModel.updateSessionCallbacks(
             BrowserSessionCallbacks(
                 onPageStart = { tabId, pageUrl ->
-                    tabs = tabs.map { current -> if (current.id == tabId) current.copy(url = pageUrl) else current }
-                    persistTabs()
-                    if (activeTabId == tabId) address = pageUrl
+                    tabs = tabs.map { current ->
+                        if (current.id == tabId) {
+                            current.copy(url = pageUrl, isLoading = true, progress = 10)
+                        } else {
+                            current
+                        }
+                    }
+                    browserViewModel.persistCurrentTabs()
+                    if (activeTabId == tabId && !isAddressFocused) {
+                        address = pageUrl.takeUnless { it == "about:blank" } ?: ""
+                    }
+                },
+                onPageStop = { tabId, _ ->
+                    tabs = tabs.map { current ->
+                        if (current.id == tabId) current.copy(isLoading = false, progress = 100) else current
+                    }
+                },
+                onProgressChange = { tabId, progress ->
+                    tabs = tabs.map { current ->
+                        if (current.id == tabId) {
+                            current.copy(progress = progress, isLoading = progress in 1..99)
+                        } else {
+                            current
+                        }
+                    }
+                },
+                onLocationChange = { tabId, pageUrl ->
+                    tabs = tabs.map { current ->
+                        if (current.id == tabId) current.copy(url = pageUrl) else current
+                    }
+                    browserViewModel.persistCurrentTabs()
+                    if (activeTabId == tabId && !isAddressFocused) {
+                        address = pageUrl.takeUnless { it == "about:blank" } ?: ""
+                    }
                 },
                 onTitleChange = { tabId, title ->
                     tabs = tabs.map { current ->
-                        if (current.id == tabId) current.copy(title = title?.takeIf { it.isNotBlank() } ?: current.url) else current
+                        if (current.id == tabId) {
+                            current.copy(title = title?.takeIf { it.isNotBlank() } ?: current.url)
+                        } else {
+                            current
+                        }
                     }
-                    persistTabs()
+                    browserViewModel.persistCurrentTabs()
                 },
                 onExternalResponse = { response ->
+                    runCatching { pendingDownload?.body?.close() }
                     pendingDownload = response
-                    val suggestedName = Uri.parse(response.uri).lastPathSegment
-                        ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
-                        ?.takeIf { it.isNotBlank() } ?: "download"
-                    downloadPicker.launch(suggestedName)
+                    downloadPicker.launch(extractDownloadFileName(response))
                 },
                 onNavigationState = { tabId, canGoBack, canGoForward ->
-                    if (activeTabId == tabId) {
-                        canGoBack?.let { canNavigateBack = it }
-                        canGoForward?.let { canNavigateForward = it }
+                    tabs = tabs.map { current ->
+                        if (current.id == tabId) {
+                            current.copy(
+                                canGoBack = canGoBack ?: current.canGoBack,
+                                canGoForward = canGoForward ?: current.canGoForward
+                            )
+                        } else {
+                            current
+                        }
                     }
+                },
+                onNewSession = { sourceTabId, uri ->
+                    val sourceTab = tabs.firstOrNull { it.id == sourceTabId }
+                    val targetWorkspaceId = sourceTab?.workspaceId ?: activeWorkspace.id
+                    val targetContainer = containers.firstOrNull { it.id == sourceTab?.containerId }
+                        ?: activeContainer
+                    val newTabId = UUID.randomUUID().toString()
+                    val newSession = browserViewModel.createSession(
+                        runtime = runtime,
+                        tabId = newTabId,
+                        container = targetContainer,
+                        isSelected = true,
+                        openImmediately = false
+                    )
+                    val newTab = SoulTab(
+                        id = newTabId,
+                        title = uri.ifBlank { "New Tab" },
+                        url = uri.ifBlank { "about:blank" },
+                        session = newSession,
+                        workspaceId = targetWorkspaceId,
+                        containerId = targetContainer.id,
+                        isLoading = true,
+                        progress = 10
+                    )
+                    tabs = tabs + newTab
+                    browserViewModel.persistCurrentTabs()
+                    if (targetWorkspaceId == activeWorkspace.id) {
+                        activeTabId = newTabId
+                        activeContainer = targetContainer
+                    }
+                    newSession
                 }
             )
         )
@@ -239,22 +430,39 @@ private fun SoulApp(runtime: GeckoRuntime) {
         }
     }
 
-    fun createSession(tab: SoulTab): GeckoSession {
-        val container = containers.firstOrNull { it.id == tab.containerId } ?: containers.first()
-        return browserViewModel.createSession(
-            runtime = runtime,
-            tab = tab,
-            container = container,
-            isSelected = tab.id == activeTabId
-        )
-    }
-
-    fun ensureSession(tabId: String): GeckoSession? {
+    fun ensureSession(tabId: String, loadUrl: String? = null): GeckoSession? {
         val tab = tabs.firstOrNull { it.id == tabId } ?: return null
-        tab.session?.let { return it }
-        val session = createSession(tab)
-        tabs = tabs.map { current -> if (current.id == tabId) current.copy(session = session) else current }
-        if (tab.url != "about:blank") session.loadUri(tab.url)
+        val targetUrl = loadUrl ?: tab.url
+        val existing = tab.session
+        if (existing != null) {
+            if (!loadUrl.isNullOrBlank() && loadUrl != "about:blank") {
+                existing.loadUri(loadUrl)
+            }
+            return existing
+        }
+        val container = containers.firstOrNull { it.id == tab.containerId } ?: containers.first()
+        val session = browserViewModel.createSession(
+            runtime = runtime,
+            tabId = tab.id,
+            container = container,
+            isSelected = tab.id == activeTabId,
+            openImmediately = true
+        )
+        tabs = tabs.map { current ->
+            if (current.id == tabId) {
+                current.copy(
+                    session = session,
+                    url = targetUrl,
+                    isLoading = targetUrl != "about:blank",
+                    progress = if (targetUrl != "about:blank") 10 else 100
+                )
+            } else {
+                current
+            }
+        }
+        if (targetUrl != "about:blank") {
+            session.loadUri(targetUrl)
+        }
         return session
     }
 
@@ -265,14 +473,20 @@ private fun SoulApp(runtime: GeckoRuntime) {
                 containers.any { it.id == item.containerId && !it.isPrivate }
         }
         tabs = saved.map { item ->
-            SoulTab(item.id, item.title, item.url, null, item.workspaceId, item.containerId)
+            SoulTab(
+                id = item.id,
+                title = item.title,
+                url = item.url,
+                session = null,
+                workspaceId = item.workspaceId,
+                containerId = item.containerId
+            )
         }
         val first = tabs.lastOrNull { it.workspaceId == activeWorkspace.id } ?: tabs.lastOrNull()
         if (first != null) {
             activeWorkspace = workspaces.firstOrNull { it.id == first.workspaceId } ?: activeWorkspace
             activeContainer = containers.firstOrNull { it.id == first.containerId } ?: activeContainer
             activeTabId = first.id
-            address = first.url.takeUnless { it == "about:blank" } ?: ""
         }
     }
 
@@ -281,18 +495,24 @@ private fun SoulApp(runtime: GeckoRuntime) {
         workspace: BrowserWorkspace = activeWorkspace,
         containerOverride: BrowserContainer? = null
     ) {
-        val container = containerOverride ?: if (workspace.id == activeWorkspace.id) activeContainer
-            else containers.firstOrNull { it.id == workspace.containerId } ?: activeContainer
+        val container = containerOverride
+            ?: if (workspace.id == activeWorkspace.id) {
+                activeContainer
+            } else {
+                containers.firstOrNull { it.id == workspace.containerId } ?: activeContainer
+            }
         val tab = SoulTab(
             id = UUID.randomUUID().toString(),
-            title = "New Tab",
+            title = if (url == "about:blank") "New Tab" else url,
             url = url,
             session = null,
             workspaceId = workspace.id,
-            containerId = container.id
+            containerId = container.id,
+            isLoading = url != "about:blank",
+            progress = if (url != "about:blank") 10 else 100
         )
         tabs = tabs + tab
-        persistTabs()
+        browserViewModel.persistCurrentTabs()
         activeTabId = tab.id
         address = if (url == "about:blank") "" else url
     }
@@ -301,56 +521,111 @@ private fun SoulApp(runtime: GeckoRuntime) {
         activeWorkspace = space
         val targetTab = tabs.lastOrNull { it.workspaceId == space.id }
         activeTabId = targetTab?.id
-        activeContainer = targetTab?.let { tab -> containers.firstOrNull { it.id == tab.containerId } }
-            ?: containers.firstOrNull { it.id == space.containerId } ?: containers.first()
-        if (targetTab == null) createTab(workspace = space)
+        activeContainer = targetTab?.let { tab ->
+            containers.firstOrNull { it.id == tab.containerId }
+        } ?: containers.firstOrNull { it.id == space.containerId } ?: containers.first()
+        if (targetTab == null) {
+            createTab(workspace = space)
+        }
     }
 
     fun navigateTo(targetUrl: String) {
         val selectedId = activeTabId
-        val selectedTab = tabs.firstOrNull { it.id == selectedId && it.workspaceId == activeWorkspace.id }
+        val selectedTab = tabs.firstOrNull {
+            it.id == selectedId && it.workspaceId == activeWorkspace.id
+        }
         if (selectedTab == null) {
             createTab(targetUrl)
-        } else {
-            tabs = tabs.map { tab -> if (tab.id == selectedTab.id) tab.copy(url = targetUrl) else tab }
-            ensureSession(selectedTab.id)
-            address = targetUrl
+            return
+        }
+        tabs = tabs.map { tab ->
+            if (tab.id == selectedTab.id) {
+                tab.copy(url = targetUrl, isLoading = true, progress = 10)
+            } else {
+                tab
+            }
+        }
+        browserViewModel.persistCurrentTabs()
+        address = targetUrl.takeUnless { it == "about:blank" } ?: ""
+        ensureSession(selectedTab.id, loadUrl = targetUrl)
+    }
+
+    fun submitAddress() {
+        val target = normalizeAddress(address)
+        if (target.isNotBlank()) {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+            navigateTo(target)
         }
     }
 
-    val activeTab = tabs.firstOrNull { it.id == activeTabId && it.workspaceId == activeWorkspace.id }
-    BackHandler(enabled = canNavigateBack) {
+    val activeTab = tabs.firstOrNull {
+        it.id == activeTabId && it.workspaceId == activeWorkspace.id
+    }
+    val workspaceTabCount = tabs.count { it.workspaceId == activeWorkspace.id }
+
+    BackHandler(enabled = activeTab?.canGoBack == true) {
         activeTab?.session?.goBack()
     }
-    LaunchedEffect(activeTabId, activeWorkspace.id, tabs.size) {
-        canNavigateBack = false
-        canNavigateForward = false
-        val selectedId = activeTabId
-        if (selectedId != null && tabs.any { it.id == selectedId && it.session == null }) {
-            ensureSession(selectedId)
+
+    // Keep address bar synced when switching tabs, workspaces, or after rotation.
+    LaunchedEffect(activeTabId, activeWorkspace.id) {
+        val visibleTab = tabs.firstOrNull {
+            it.id == activeTabId && it.workspaceId == activeWorkspace.id
         }
-        val visibleId = tabs.firstOrNull { it.id == activeTabId && it.workspaceId == activeWorkspace.id }?.id
+        if (!isAddressFocused) {
+            address = visibleTab?.url?.takeUnless { it == "about:blank" } ?: ""
+        }
+        // Lazy restoration: only open GeckoSession when an actual URL tab becomes active.
+        if (visibleTab != null && visibleTab.session == null && visibleTab.url != "about:blank") {
+            ensureSession(visibleTab.id)
+        }
+        val visibleId = visibleTab?.id
         tabs.forEach { tab ->
-            val isVisible = tab.id == visibleId
-            tab.session?.setActive(isVisible)
-            tab.session?.setFocused(isVisible)
-        }
-        if (visibleId == null) {
-            canNavigateBack = false
-            canNavigateForward = false
+            val session = tab.session
+            if (session != null && session.isOpen) {
+                val isVisible = tab.id == visibleId
+                session.setActive(isVisible)
+                session.setFocused(isVisible)
+            }
         }
     }
+
     LaunchedEffect(Unit) {
         restoreSavedTabs()
         if (tabs.isEmpty()) createTab()
     }
 
-    MaterialTheme(colorScheme = darkColorScheme(background = Ink, surface = Panel, primary = Lavender, onBackground = Color.White, onSurface = Color.White)) {
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            background = Ink,
+            surface = Panel,
+            primary = Lavender,
+            onBackground = Color.White,
+            onSurface = Color.White
+        )
+    ) {
         Scaffold(containerColor = Ink) { padding ->
-            Column(Modifier.fillMaxSize().padding(padding).background(Ink)) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .background(Ink)
+            ) {
                 // Zen-inspired compact top bar and workspace switcher.
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).background(Lavender), contentAlignment = Alignment.Center) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Lavender),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text("S", color = Ink, fontWeight = FontWeight.Black, fontSize = 20.sp)
                     }
                     Spacer(Modifier.width(10.dp))
@@ -358,87 +633,165 @@ private fun SoulApp(runtime: GeckoRuntime) {
                         Text("Soul Browser", fontWeight = FontWeight.Bold, fontSize = 17.sp)
                         Text(activeWorkspace.name, color = Muted, fontSize = 11.sp)
                     }
-                    IconButton(onClick = { showSpaces = true }) { Icon(Icons.Default.Workspaces, "Workspaces", tint = Lavender) }
-                    IconButton(onClick = { showContainers = true }) { Icon(Icons.Default.Layers, "Containers", tint = Lavender) }
-                    IconButton(onClick = { showTabs = true }) { Icon(Icons.Default.Tab, "Tabs", tint = Color.White); Text("${tabs.count { it.workspaceId == activeWorkspace.id }}", fontSize = 10.sp) }
+                    IconButton(onClick = { showSpaces = true }) {
+                        Icon(Icons.Default.Workspaces, "Workspaces", tint = Lavender)
+                    }
+                    IconButton(onClick = { showContainers = true }) {
+                        Icon(Icons.Default.Layers, "Containers", tint = Lavender)
+                    }
+                    IconButton(onClick = { showTabs = true }) {
+                        Box(
+                            Modifier
+                                .size(24.dp)
+                                .border(1.5.dp, Color.White, RoundedCornerShape(6.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (workspaceTabCount > 99) "99+" else "$workspaceTabCount",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
 
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(18.dp)).background(Panel2).padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(Color(activeContainer.color)))
+                // Address bar
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Panel2)
+                        .padding(horizontal = 12.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color(activeContainer.color))
+                    )
                     Spacer(Modifier.width(8.dp))
                     BasicTextField(
                         value = address,
                         onValueChange = { address = it },
-                        modifier = Modifier.weight(1f).padding(vertical = 12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(vertical = 12.dp)
+                            .onFocusChanged { isAddressFocused = it.isFocused },
                         singleLine = true,
+                        cursorBrush = SolidColor(Lavender),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = {
-                            val target = normalizeAddress(address)
-                            if (target.isNotBlank()) {
-                                navigateTo(target)
-                                address = target
+                        keyboardActions = KeyboardActions(onSearch = { submitAddress() }),
+                        textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                        decorationBox = { inner ->
+                            if (address.isEmpty()) {
+                                Text("Search or enter address", color = Muted, fontSize = 14.sp)
                             }
-                        }),
-                        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 14.sp),
-                        decorationBox = { inner -> if (address.isEmpty()) Text("Search or enter address", color = Muted, fontSize = 14.sp); inner() }
+                            inner()
+                        }
                     )
                     val privatePage = activeTab?.let { tab ->
                         containers.firstOrNull { it.id == tab.containerId }?.isPrivate == true
                     } == true
+                    val isBookmarked = activeTab != null && bookmarks.any { it.url == activeTab.url }
                     IconButton(
-                        enabled = activeTab != null && !privatePage,
+                        enabled = activeTab != null && !privatePage && activeTab.url.startsWith("http"),
                         onClick = {
                             val current = activeTab
                             if (current != null && !privatePage && current.url.startsWith("http")) {
                                 val existing = bookmarks.any { it.url == current.url }
-                                bookmarks = if (existing) bookmarks.filterNot { it.url == current.url }
-                                    else bookmarks + BrowserBookmark(current.url, current.title.ifBlank { current.url })
+                                bookmarks = if (existing) {
+                                    bookmarks.filterNot { it.url == current.url }
+                                } else {
+                                    bookmarks + BrowserBookmark(
+                                        url = current.url,
+                                        title = current.title.ifBlank { current.url }
+                                    )
+                                }
                                 SoulStore.saveBookmarks(context, bookmarks)
                             }
                         }
                     ) {
                         Icon(
                             Icons.Default.Star,
-                            contentDescription = if (privatePage) "Bookmarks unavailable in private container" else "Bookmark current page",
-                            tint = if (privatePage) Muted.copy(alpha = 0.35f) else if (bookmarks.any { it.url == activeTab?.url }) Lavender else Muted
+                            contentDescription = if (privatePage) {
+                                "Bookmarks unavailable in private container"
+                            } else {
+                                "Bookmark current page"
+                            },
+                            tint = when {
+                                privatePage -> Muted.copy(alpha = 0.35f)
+                                isBookmarked -> Lavender
+                                else -> Muted
+                            }
                         )
                     }
-                    IconButton(onClick = { showBookmarks = true }) { Icon(Icons.Default.Bookmarks, "Bookmarks", tint = Color.White) }
-                    IconButton(onClick = {
-                        val target = normalizeAddress(address)
-                        if (target.isNotBlank()) {
-                            navigateTo(target)
-                            address = target
-                        }
-                    }) { Icon(Icons.Default.ArrowForward, "Go", tint = Lavender) }
+                    IconButton(onClick = { showBookmarks = true }) {
+                        Icon(Icons.Default.Bookmarks, "Bookmarks", tint = Color.White)
+                    }
+                    IconButton(onClick = { submitAddress() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, "Go", tint = Lavender)
+                    }
                 }
-                Spacer(Modifier.height(10.dp))
 
-                if (activeTab == null || activeTab.session == null || activeTab.url == "about:blank") {
+                // Slim loading progress bar
+                if (activeTab?.isLoading == true && activeTab.url != "about:blank") {
+                    LinearProgressIndicator(
+                        progress = { activeTab.progress.coerceIn(0, 100) / 100f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 4.dp)
+                            .height(2.dp)
+                            .clip(RoundedCornerShape(1.dp)),
+                        color = Lavender,
+                        trackColor = Panel2
+                    )
+                } else {
+                    Spacer(Modifier.height(10.dp))
+                }
+
+                // Main content area (HomePanel or single reused GeckoView)
+                val activeSession = activeTab?.session
+                if (activeTab == null || activeSession == null || activeTab.url == "about:blank") {
                     HomePanel(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
                         activeContainer = activeContainer,
-                        onOpen = { address = it; val target = normalizeAddress(it); navigateTo(target); address = target },
+                        onOpen = { rawUrl ->
+                            val target = normalizeAddress(rawUrl)
+                            if (target.isNotBlank()) navigateTo(target)
+                        },
                         onNewTab = { createTab() }
                     )
                 } else {
-                    key(activeTab.id) {
-                        AndroidView(
-                            modifier = Modifier.weight(1f).fillMaxWidth(),
-                            factory = { view -> GeckoView(view).apply { setSession(activeTab.session!!) } },
-                            update = { geckoView ->
-                                if (geckoView.session !== activeTab.session) {
-                                    geckoView.releaseSession()
-                                    geckoView.setSession(activeTab.session!!)
-                                }
-                            },
-                            onRelease = { geckoView -> geckoView.releaseSession() }
-                        )
-                    }
+                    AndroidView(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        factory = { viewContext ->
+                            GeckoView(viewContext).apply {
+                                setSession(activeSession)
+                            }
+                        },
+                        update = { geckoView ->
+                            if (geckoView.session !== activeSession) {
+                                geckoView.releaseSession()
+                                geckoView.setSession(activeSession)
+                            }
+                        },
+                        onRelease = { geckoView ->
+                            geckoView.releaseSession()
+                        }
+                    )
                 }
 
                 // Floating bottom navigation, compact and thumb-friendly.
                 Row(
-                    Modifier.fillMaxWidth()
+                    Modifier
+                        .fillMaxWidth()
                         .padding(horizontal = 18.dp, vertical = 10.dp)
                         .clip(RoundedCornerShape(22.dp))
                         .background(Panel)
@@ -448,16 +801,23 @@ private fun SoulApp(runtime: GeckoRuntime) {
                             detectDragGestures(
                                 onDragEnd = {
                                     if (abs(dragX) > 48f && abs(dragX) > abs(dragY)) {
-                                        val currentIndex = workspaces.indexOfFirst { it.id == activeWorkspace.id }
+                                        val currentIndex = workspaces.indexOfFirst {
+                                            it.id == activeWorkspace.id
+                                        }
                                         val nextIndex = currentIndex + if (dragX < 0) 1 else -1
-                                        if (nextIndex in workspaces.indices) switchWorkspace(workspaces[nextIndex])
+                                        if (nextIndex in workspaces.indices) {
+                                            switchWorkspace(workspaces[nextIndex])
+                                        }
                                     } else if (dragY < -48f) {
                                         showTabs = true
                                     }
                                     dragX = 0f
                                     dragY = 0f
                                 },
-                                onDragCancel = { dragX = 0f; dragY = 0f },
+                                onDragCancel = {
+                                    dragX = 0f
+                                    dragY = 0f
+                                },
                                 onDrag = { change, amount ->
                                     dragX += amount.x
                                     dragY += amount.y
@@ -469,175 +829,442 @@ private fun SoulApp(runtime: GeckoRuntime) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(onClick = { activeTab?.session?.goBack() }, enabled = canNavigateBack) { Icon(Icons.Default.ArrowBack, "Back", tint = Color.White) }
-                    IconButton(onClick = { activeTab?.session?.goForward() }, enabled = canNavigateForward) { Icon(Icons.Default.ArrowForward, "Forward", tint = Color.White) }
-                    IconButton(onClick = { activeTab?.session?.reload() }) { Icon(Icons.Default.Refresh, "Reload", tint = Color.White) }
-                    IconButton(onClick = { createTab() }) { Icon(Icons.Default.Add, "New tab", tint = Lavender) }
-                    IconButton(onClick = { showTabs = true }) { Icon(Icons.Default.GridView, "Tab overview", tint = Color.White) }
+                    val canBack = activeTab?.canGoBack == true
+                    val canForward = activeTab?.canGoForward == true
+                    IconButton(
+                        onClick = { activeTab?.session?.goBack() },
+                        enabled = canBack
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            "Back",
+                            tint = if (canBack) Color.White else Muted.copy(alpha = 0.35f)
+                        )
+                    }
+                    IconButton(
+                        onClick = { activeTab?.session?.goForward() },
+                        enabled = canForward
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward,
+                            "Forward",
+                            tint = if (canForward) Color.White else Muted.copy(alpha = 0.35f)
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            if (activeTab?.isLoading == true) {
+                                activeTab.session?.stop()
+                            } else {
+                                activeTab?.session?.reload()
+                            }
+                        },
+                        enabled = activeTab?.session != null
+                    ) {
+                        Icon(
+                            if (activeTab?.isLoading == true) Icons.Default.Close else Icons.Default.Refresh,
+                            if (activeTab?.isLoading == true) "Stop" else "Reload",
+                            tint = if (activeTab?.session != null) Color.White else Muted.copy(alpha = 0.35f)
+                        )
+                    }
+                    IconButton(onClick = { createTab() }) {
+                        Icon(Icons.Default.Add, "New tab", tint = Lavender)
+                    }
+                    IconButton(onClick = { showTabs = true }) {
+                        Icon(Icons.Default.GridView, "Tab overview", tint = Color.White)
+                    }
                 }
             }
         }
 
-        if (showTabs) AlertDialog(
-            onDismissRequest = { showTabs = false }, containerColor = Panel,
-            title = { Text("Tabs · ${activeWorkspace.name}") },
-            text = {
-                Column {
-                    tabs.filter { it.workspaceId == activeWorkspace.id }.forEach { tab ->
-                        Row(Modifier.fillMaxWidth().clickable {
-                            activeTabId = tab.id
-                            address = tab.url
-                            activeContainer = containers.firstOrNull { it.id == tab.containerId } ?: activeContainer
-                            showTabs = false
-                        }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Language, null, tint = Lavender)
-                            Spacer(Modifier.width(10.dp))
-                            Text(tab.title.ifBlank { tab.url.ifBlank { "New Tab" } }, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            IconButton(onClick = { tab.session?.close(); tabs = tabs.filterNot { it.id == tab.id }; persistTabs(); if (activeTabId == tab.id) activeTabId = tabs.lastOrNull { it.workspaceId == activeWorkspace.id }?.id }) { Icon(Icons.Default.Close, "Close tab", tint = Muted) }
-                        }
-                    }
-                    TextButton(onClick = { createTab(); showTabs = false }) { Text("+ New tab") }
-                }
-            }, confirmButton = { TextButton(onClick = { showTabs = false }) { Text("Done") } }
-        )
-
-        if (showSpaces) AlertDialog(
-            onDismissRequest = { showSpaces = false }, containerColor = Panel,
-            title = { Text("Workspaces") },
-            text = { Column {
-                workspaces.forEach { space ->
-                    Row(Modifier.fillMaxWidth().clickable {
-                        switchWorkspace(space)
-                        showSpaces = false
-                    }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Workspaces, null, tint = if (space.id == activeWorkspace.id) Lavender else Muted)
-                        Spacer(Modifier.width(12.dp)); Text(space.name, Modifier.weight(1f)); if (space.id == activeWorkspace.id) Icon(Icons.Default.Check, null, tint = Lavender)
-                    }
-                }
-                TextButton(onClick = { createDialog = "workspace"; newName = ""; showSpaces = false }) { Text("+ Create workspace") }
-            } }, confirmButton = { TextButton(onClick = { showSpaces = false }) { Text("Close") } }
-        )
-
-        if (showContainers) AlertDialog(
-            onDismissRequest = { showContainers = false }, containerColor = Panel,
-            title = { Text("Containers") },
-            text = { Column {
-                containers.forEach { item ->
-                    Row(Modifier.fillMaxWidth().clickable {
-                        activeContainer = item
-                        // Remember the selected default container for this workspace.
-                        workspaces = workspaces.map { space -> if (space.id == activeWorkspace.id) space.copy(containerId = item.id) else space }
-                        activeWorkspace = workspaces.first { it.id == activeWorkspace.id }
-                        SoulStore.saveWorkspaces(context, workspaces)
-                        showContainers = false
-                        // A container switch opens a new tab in that isolated Gecko storage context.
-                        createTab(containerOverride = item)
-                    }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(10.dp).clip(CircleShape).background(Color(item.color)))
-                        Spacer(Modifier.width(12.dp)); Text(item.name, Modifier.weight(1f)); if (item.id == activeContainer.id) Icon(Icons.Default.Check, null, tint = Lavender)
-                        IconButton(onClick = { confirmClearContainer = item }) {
-                            Icon(Icons.Default.DeleteOutline, "Clear container data", tint = Muted)
-                        }
-                    }
-                }
-                TextButton(onClick = { createDialog = "container"; newName = ""; newContainerPrivate = false; showContainers = false }) { Text("+ New container") }
-            } }, confirmButton = { TextButton(onClick = { showContainers = false }) { Text("Close") } }
-        )
-
-        if (confirmClearContainer != null) {
-            val targetContainer = confirmClearContainer!!
+        if (showTabs) {
+            val workspaceTabs = tabs.filter { it.workspaceId == activeWorkspace.id }
             AlertDialog(
-                onDismissRequest = { confirmClearContainer = null },
+                onDismissRequest = { showTabs = false },
                 containerColor = Panel,
-                title = { Text("Clear " + targetContainer.name + " data?") },
-                text = { Text("This closes tabs in this container and deletes its cookies and site storage. You will be signed out of websites in this container.") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        val removedIds = tabs.filter { it.containerId == targetContainer.id }.map { it.id }.toSet()
-                        tabs.filter { it.containerId == targetContainer.id }.forEach { it.session?.close() }
-                        tabs = tabs.filterNot { it.containerId == targetContainer.id }
-                        runtime.storageController.clearDataForSessionContext(targetContainer.id)
-                        persistTabs()
-                        if (activeTabId in removedIds) {
-                            activeTabId = null
-                            createTab(containerOverride = activeContainer)
+                title = { Text("Tabs · ${activeWorkspace.name}") },
+                text = {
+                    Column {
+                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                            items(workspaceTabs, key = { it.id }) { tab ->
+                                val isCurrent = tab.id == activeTabId
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isCurrent) Panel2 else Color.Transparent)
+                                        .clickable {
+                                            activeTabId = tab.id
+                                            activeContainer = containers.firstOrNull {
+                                                it.id == tab.containerId
+                                            } ?: activeContainer
+                                            showTabs = false
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Language,
+                                        null,
+                                        tint = if (isCurrent) Lavender else Muted
+                                    )
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(
+                                        tab.title.ifBlank { tab.url.ifBlank { "New Tab" } },
+                                        Modifier.weight(1f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = if (isCurrent) Lavender else Color.White
+                                    )
+                                    IconButton(
+                                        onClick = {
+                                            runCatching { tab.session?.close() }
+                                            val remaining = tabs.filterNot { it.id == tab.id }
+                                            tabs = remaining
+                                            browserViewModel.persistCurrentTabs()
+                                            if (activeTabId == tab.id) {
+                                                val fallback = remaining.lastOrNull {
+                                                    it.workspaceId == activeWorkspace.id
+                                                }
+                                                activeTabId = fallback?.id
+                                                if (fallback != null) {
+                                                    activeContainer = containers.firstOrNull {
+                                                        it.id == fallback.containerId
+                                                    } ?: activeContainer
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.Close, "Close tab", tint = Muted)
+                                    }
+                                }
+                            }
                         }
-                        confirmClearContainer = null
-                    }) { Text("Clear data") }
+                        TextButton(onClick = { createTab(); showTabs = false }) {
+                            Text("+ New tab")
+                        }
+                    }
                 },
-                dismissButton = { TextButton(onClick = { confirmClearContainer = null }) { Text("Cancel") } }
+                confirmButton = {
+                    TextButton(onClick = { showTabs = false }) { Text("Done") }
+                }
             )
         }
 
-        if (showBookmarks) AlertDialog(
-            onDismissRequest = { showBookmarks = false }, containerColor = Panel,
-            title = { Text("Bookmarks") },
-            text = {
-                if (bookmarks.isEmpty()) Text("No bookmarks yet. Open a page and tap the star.", color = Muted)
-                else LazyColumn {
-                    items(bookmarks, key = { it.url }) { item ->
-                        Row(Modifier.fillMaxWidth().clickable {
-                            val tab = activeTab
-                            navigateTo(item.url)
-                            address = item.url
-                            showBookmarks = false
-                        }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Bookmark, null, tint = Lavender)
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(item.url, color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (showSpaces) {
+            AlertDialog(
+                onDismissRequest = { showSpaces = false },
+                containerColor = Panel,
+                title = { Text("Workspaces") },
+                text = {
+                    Column {
+                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                            items(workspaces, key = { it.id }) { space ->
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            switchWorkspace(space)
+                                            showSpaces = false
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Workspaces,
+                                        null,
+                                        tint = if (space.id == activeWorkspace.id) Lavender else Muted
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(space.name, Modifier.weight(1f))
+                                    if (space.id == activeWorkspace.id) {
+                                        Icon(Icons.Default.Check, null, tint = Lavender)
+                                    }
+                                }
                             }
-                            IconButton(onClick = {
-                                bookmarks = bookmarks.filterNot { it.url == item.url }
-                                SoulStore.saveBookmarks(context, bookmarks)
-                            }) { Icon(Icons.Default.Close, "Remove bookmark", tint = Muted) }
+                        }
+                        TextButton(
+                            onClick = {
+                                createDialog = "workspace"
+                                newName = ""
+                                showSpaces = false
+                            }
+                        ) {
+                            Text("+ Create workspace")
                         }
                     }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showSpaces = false }) { Text("Close") }
                 }
-            }, confirmButton = { TextButton(onClick = { showBookmarks = false }) { Text("Close") } }
-        )
+            )
+        }
 
-        if (createDialog != null) AlertDialog(
-            onDismissRequest = { createDialog = null }, containerColor = Panel,
-            title = { Text(if (createDialog == "workspace") "New workspace" else "New container") },
-            text = { Column {
-                OutlinedTextField(value = newName, onValueChange = { newName = it }, label = { Text("Name") }, singleLine = true)
-                if (createDialog == "container") {
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = newContainerPrivate, onCheckedChange = { newContainerPrivate = it })
-                        Column {
-                            Text("Private container", fontSize = 14.sp)
-                            Text("Do not restore its tabs or URLs after closing", color = Muted, fontSize = 11.sp)
+        if (showContainers) {
+            AlertDialog(
+                onDismissRequest = { showContainers = false },
+                containerColor = Panel,
+                title = { Text("Containers") },
+                text = {
+                    Column {
+                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                            items(containers, key = { it.id }) { item ->
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            activeContainer = item
+                                            workspaces = workspaces.map { space ->
+                                                if (space.id == activeWorkspace.id) {
+                                                    space.copy(containerId = item.id)
+                                                } else {
+                                                    space
+                                                }
+                                            }
+                                            activeWorkspace = workspaces.first { it.id == activeWorkspace.id }
+                                            SoulStore.saveWorkspaces(context, workspaces)
+                                            showContainers = false
+                                            createTab(containerOverride = item)
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .size(10.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(item.color))
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        text = if (item.isPrivate) "${item.name} (Private)" else item.name,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (item.id == activeContainer.id) {
+                                        Icon(Icons.Default.Check, null, tint = Lavender)
+                                    }
+                                    IconButton(onClick = { confirmClearContainer = item }) {
+                                        Icon(
+                                            Icons.Default.DeleteOutline,
+                                            "Clear container data",
+                                            tint = Muted
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        TextButton(
+                            onClick = {
+                                createDialog = "container"
+                                newName = ""
+                                newContainerPrivate = false
+                                showContainers = false
+                            }
+                        ) {
+                            Text("+ New container")
                         }
                     }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showContainers = false }) { Text("Close") }
                 }
-            } },
-            confirmButton = { TextButton(onClick = {
-                if (newName.isNotBlank()) {
-                    if (createDialog == "workspace") {
-                        val item = BrowserWorkspace(name = newName.trim(), containerId = activeContainer.id)
-                        workspaces = workspaces + item; activeWorkspace = item; SoulStore.saveWorkspaces(context, workspaces)
-                    } else {
-                        val palette = listOf(0xFFFFB86B, 0xFF8BD5CA, 0xFFC6A0F6, 0xFFED8796)
-                        val item = BrowserContainer(name = newName.trim(), color = palette[containers.size % palette.size], isPrivate = newContainerPrivate)
-                        containers = containers + item
-                        activeContainer = item
-                        SoulStore.saveContainers(context, containers)
-                        createTab(containerOverride = item)
+            )
+        }
+
+        confirmClearContainer?.let { targetContainer ->
+            AlertDialog(
+                onDismissRequest = { confirmClearContainer = null },
+                containerColor = Panel,
+                title = { Text("Clear ${targetContainer.name} data?") },
+                text = {
+                    Text(
+                        "This closes tabs in this container and deletes its cookies and site storage. You will be signed out of websites in this container."
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val removedIds = tabs
+                                .filter { it.containerId == targetContainer.id }
+                                .map { it.id }
+                                .toSet()
+                            tabs.filter { it.containerId == targetContainer.id }
+                                .forEach { runCatching { it.session?.close() } }
+                            tabs = tabs.filterNot { it.containerId == targetContainer.id }
+                            if (!targetContainer.isPrivate) {
+                                runtime.storageController.clearDataForSessionContext(targetContainer.id)
+                            }
+                            browserViewModel.persistCurrentTabs()
+                            if (activeTabId in removedIds) {
+                                activeTabId = null
+                                createTab(containerOverride = activeContainer)
+                            }
+                            confirmClearContainer = null
+                        }
+                    ) {
+                        Text("Clear data")
                     }
+                },
+                dismissButton = {
+                    TextButton(onClick = { confirmClearContainer = null }) { Text("Cancel") }
                 }
-                createDialog = null
-            }) { Text("Create") } },
-            dismissButton = { TextButton(onClick = { createDialog = null }) { Text("Cancel") } }
-        )
+            )
+        }
+
+        if (showBookmarks) {
+            AlertDialog(
+                onDismissRequest = { showBookmarks = false },
+                containerColor = Panel,
+                title = { Text("Bookmarks") },
+                text = {
+                    if (bookmarks.isEmpty()) {
+                        Text("No bookmarks yet. Open a page and tap the star.", color = Muted)
+                    } else {
+                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                            items(bookmarks, key = { it.url }) { item ->
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            navigateTo(item.url)
+                                            showBookmarks = false
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Bookmark, null, tint = Lavender)
+                                    Spacer(Modifier.width(10.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            item.title,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            item.url,
+                                            color = Muted,
+                                            fontSize = 10.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            bookmarks = bookmarks.filterNot { it.url == item.url }
+                                            SoulStore.saveBookmarks(context, bookmarks)
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.Close, "Remove bookmark", tint = Muted)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showBookmarks = false }) { Text("Close") }
+                }
+            )
+        }
+
+        if (createDialog != null) {
+            AlertDialog(
+                onDismissRequest = { createDialog = null },
+                containerColor = Panel,
+                title = {
+                    Text(if (createDialog == "workspace") "New workspace" else "New container")
+                },
+                text = {
+                    Column {
+                        OutlinedTextField(
+                            value = newName,
+                            onValueChange = { newName = it },
+                            label = { Text("Name") },
+                            singleLine = true
+                        )
+                        if (createDialog == "container") {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = newContainerPrivate,
+                                    onCheckedChange = { newContainerPrivate = it }
+                                )
+                                Column {
+                                    Text("Private container", fontSize = 14.sp)
+                                    Text(
+                                        "Do not restore its tabs or URLs after closing",
+                                        color = Muted,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (newName.isNotBlank()) {
+                                if (createDialog == "workspace") {
+                                    val item = BrowserWorkspace(
+                                        name = newName.trim(),
+                                        containerId = activeContainer.id
+                                    )
+                                    workspaces = workspaces + item
+                                    SoulStore.saveWorkspaces(context, workspaces)
+                                    switchWorkspace(item)
+                                } else {
+                                    val palette = listOf(0xFFFFB86B, 0xFF8BD5CA, 0xFFC6A0F6, 0xFFED8796)
+                                    val item = BrowserContainer(
+                                        name = newName.trim(),
+                                        color = palette[containers.size % palette.size],
+                                        isPrivate = newContainerPrivate
+                                    )
+                                    containers = containers + item
+                                    activeContainer = item
+                                    SoulStore.saveContainers(context, containers)
+                                    createTab(containerOverride = item)
+                                }
+                            }
+                            createDialog = null
+                        }
+                    ) {
+                        Text("Create")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { createDialog = null }) { Text("Cancel") }
+                }
+            )
+        }
     }
 }
 
 @Composable
-private fun HomePanel(activeContainer: BrowserContainer, onOpen: (String) -> Unit, onNewTab: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Box(Modifier.size(76.dp).clip(RoundedCornerShape(26.dp)).background(Lavender), contentAlignment = Alignment.Center) { Text("S", color = Ink, fontSize = 42.sp, fontWeight = FontWeight.Black) }
+private fun HomePanel(
+    modifier: Modifier = Modifier,
+    activeContainer: BrowserContainer,
+    onOpen: (String) -> Unit,
+    onNewTab: () -> Unit
+) {
+    Column(
+        modifier = modifier.padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            Modifier
+                .size(76.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(Lavender),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("S", color = Ink, fontSize = 42.sp, fontWeight = FontWeight.Black)
+        }
         Spacer(Modifier.height(18.dp))
         Text("A quieter way to browse.", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
