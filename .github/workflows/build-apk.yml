@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build debug APK
+    name: Test and build optimized Android packages
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout source
@@ -52,15 +52,33 @@ jobs:
           test -f app/src/main/AndroidManifest.xml
 
       - name: Run unit tests
-        run: gradle --no-daemon testDebugUnitTest --stacktrace
+        run: gradle --no-daemon testDebugUnitTest testReleaseUnitTest --stacktrace
 
-      - name: Build debug APK
-        run: gradle --no-daemon assembleDebug --stacktrace
+      - name: Build optimized release APK
+        run: gradle --no-daemon assembleRelease --stacktrace
 
-      - name: Upload APK
+      - name: Build Android App Bundle
+        run: gradle --no-daemon bundleRelease --stacktrace
+
+      - name: Report package sizes
+        shell: bash
+        run: |
+          ls -lh app/build/outputs/apk/release/*.apk
+          ls -lh app/build/outputs/bundle/release/*.aab
+          sha256sum app/build/outputs/apk/release/*.apk app/build/outputs/bundle/release/*.aab
+
+      - name: Upload optimized APK
         uses: actions/upload-artifact@v4
         with:
-          name: Soul-Browser-debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Soul-Browser-optimized-ARM64-APK
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Android App Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Soul-Browser-release-AAB
+          path: app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
           retention-days: 14
