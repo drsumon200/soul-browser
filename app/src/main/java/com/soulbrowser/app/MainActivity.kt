@@ -131,37 +131,36 @@ private fun SoulApp(runtime: GeckoRuntime) {
 
     fun createSession(tab: SoulTab): GeckoSession {
         val container = containers.firstOrNull { it.id == tab.containerId } ?: containers.first()
-        val settings = GeckoSessionSettings.Builder()
-            .contextId(container.id)
-            .usePrivateMode(container.isPrivate)
-            .useTrackingProtection(true)
-            .suspendMediaWhenInactive(true)
-            .build()
-        return GeckoSession(settings).also { session ->
-            val tabId = tab.id
-            session.progressDelegate = object : GeckoSession.ProgressDelegate {
-                override fun onPageStart(session: GeckoSession, pageUrl: String) {
-                    tabs = tabs.map { current -> if (current.id == tabId) current.copy(url = pageUrl) else current }
-                    persistTabs()
-                    if (activeTabId == tabId) address = pageUrl
+        val session = browserViewModel.createSession(
+            runtime = runtime,
+            tab = tab,
+            container = container,
+            isSelected = tab.id == activeTabId,
+            onPageStart = { tabId, pageUrl ->
+                tabs = tabs.map { current -> if (current.id == tabId) current.copy(url = pageUrl) else current }
+                persistTabs()
+                if (activeTabId == tabId) address = pageUrl
+            },
+            onTitleChange = { tabId, title ->
+                tabs = tabs.map { current ->
+                    if (current.id == tabId) current.copy(title = title?.takeIf { it.isNotBlank() } ?: current.url) else current
+                }
+                persistTabs()
+            },
+            onExternalResponse = { response ->
+                pendingDownload = response
+                val suggestedName = Uri.parse(response.uri).lastPathSegment
+                    ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
+                    ?.takeIf { it.isNotBlank() } ?: "download"
+                downloadPicker.launch(suggestedName)
+            },
+            onNavigationState = { tabId, canGoBack, canGoForward ->
+                if (activeTabId == tabId) {
+                    canNavigateBack = canGoBack
+                    canNavigateForward = canGoForward
                 }
             }
-            session.contentDelegate = object : GeckoSession.ContentDelegate {
-                override fun onTitleChange(session: GeckoSession, title: String?) {
-                    tabs = tabs.map { current ->
-                        if (current.id == tabId) current.copy(title = title?.takeIf { it.isNotBlank() } ?: current.url) else current
-                    }
-                    persistTabs()
-                }
-
-                override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
-                    pendingDownload = response
-                    val suggestedName = Uri.parse(response.uri).lastPathSegment
-                        ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
-                        ?.takeIf { it.isNotBlank() } ?: "download"
-                    downloadPicker.launch(suggestedName)
-                }
-            }
+        )
             session.promptDelegate = object : GeckoSession.PromptDelegate {
                 override fun onAlertPrompt(
                     session: GeckoSession,
@@ -239,19 +238,8 @@ private fun SoulApp(runtime: GeckoRuntime) {
                     return result
                 }
             }
-            session.navigationDelegate = object : GeckoSession.NavigationDelegate {
-                override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
-                    if (activeTabId == tabId) canNavigateBack = canGoBack
-                }
-                override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {
-                    if (activeTabId == tabId) canNavigateForward = canGoForward
-                }
-            }
-            session.open(runtime)
-            val isSelected = tabId == activeTabId
-            session.setActive(isSelected)
-            session.setFocused(isSelected)
-        }
+
+        return session
     }
 
     fun ensureSession(tabId: String): GeckoSession? {

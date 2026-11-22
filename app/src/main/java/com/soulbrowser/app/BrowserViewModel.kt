@@ -4,6 +4,10 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.mutableStateOf
+import org.mozilla.geckoview.GeckoRuntime
+import org.mozilla.geckoview.GeckoSession
+import org.mozilla.geckoview.GeckoSessionSettings
+import org.mozilla.geckoview.WebResponse
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -24,6 +28,55 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val activeTabIdState = mutableStateOf<String?>(null)
 
     private var persistJob: Job? = null
+
+    /**
+     * Creates and opens a GeckoSession for a tab. Session delegates are centralized
+     * here so Activity recreation does not duplicate browser-engine lifecycle logic.
+     */
+    fun createSession(
+        runtime: GeckoRuntime,
+        tab: SoulTab,
+        container: BrowserContainer,
+        isSelected: Boolean,
+        onPageStart: (String, String) -> Unit,
+        onTitleChange: (String, String?) -> Unit,
+        onExternalResponse: (WebResponse) -> Unit,
+        onNavigationState: (String, Boolean, Boolean) -> Unit
+    ): GeckoSession {
+        val settings = GeckoSessionSettings.Builder()
+            .contextId(container.id)
+            .usePrivateMode(container.isPrivate)
+            .useTrackingProtection(true)
+            .suspendMediaWhenInactive(true)
+            .build()
+        return GeckoSession(settings).also { session ->
+            val tabId = tab.id
+            session.progressDelegate = object : GeckoSession.ProgressDelegate {
+                override fun onPageStart(session: GeckoSession, pageUrl: String) {
+                    onPageStart(tabId, pageUrl)
+                }
+            }
+            session.contentDelegate = object : GeckoSession.ContentDelegate {
+                override fun onTitleChange(session: GeckoSession, title: String?) {
+                    onTitleChange(tabId, title)
+                }
+                override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
+                    onExternalResponse(response)
+                }
+            }
+            session.navigationDelegate = object : GeckoSession.NavigationDelegate {
+                override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
+                    onNavigationState(tabId, canGoBack, false)
+                }
+                override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {
+                    onNavigationState(tabId, false, canGoForward)
+                }
+            }
+            session.open(runtime)
+            session.setActive(isSelected)
+            session.setFocused(isSelected)
+        }
+    }
 
     fun persistTabs(items: List<SavedTab>) {
         persistJob?.cancel()
