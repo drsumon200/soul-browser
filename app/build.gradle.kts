@@ -14,24 +14,27 @@ android {
         applicationId = "com.soulbrowser.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5.0-alpha"
+        versionCode = 6
+        versionName = "0.6.0-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
         // The current target device is Honor 200 (64-bit ARM).
-        ndk { abiFilters += listOf("arm64-v8a") }
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            // Keep the debug build installable while applying the same R8/resource
-            // shrinking as release, so test APKs are not unnecessarily bloated.
+            // Keep the debug build small with R8 shrinking, but keep stack traces readable.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
+                "proguard-debug.pro"
             )
         }
         release {
@@ -48,8 +51,16 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
-    packaging { jniLibs { useLegacyPackaging = true } }
+
+    buildFeatures {
+        compose = true
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 kotlin {
