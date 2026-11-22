@@ -1,17 +1,17 @@
 package com.soulbrowser.app
 
 import android.app.Application
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoSessionSettings
 import org.mozilla.geckoview.WebResponse
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 data class PendingFilePrompt(
     val prompt: GeckoSession.PromptDelegate.FilePrompt,
@@ -19,16 +19,16 @@ data class PendingFilePrompt(
 )
 
 data class BrowserSessionCallbacks(
-    val onPageStart: (String, String) -> Unit,
-    val onTitleChange: (String, String?) -> Unit,
-    val onExternalResponse: (WebResponse) -> Unit,
-    val onNavigationState: (String, Boolean?, Boolean?) -> Unit
+    val onPageStart: (tabId: String, url: String) -> Unit,
+    val onPageStop: (tabId: String, success: Boolean) -> Unit,
+    val onProgressChange: (tabId: String, progress: Int) -> Unit,
+    val onLocationChange: (tabId: String, url: String) -> Unit,
+    val onTitleChange: (tabId: String, title: String?) -> Unit,
+    val onExternalResponse: (response: WebResponse) -> Unit,
+    val onNavigationState: (tabId: String, canGoBack: Boolean?, canGoForward: Boolean?) -> Unit,
+    val onNewSession: (sourceTabId: String, uri: String) -> GeckoSession?
 )
 
-/**
- * Debounces tab metadata writes so redirects and title changes do not repeatedly
- * serialize the complete tab list to SharedPreferences.
- */
 class BrowserViewModel(application: Application) : AndroidViewModel(application) {
     val containersState = mutableStateOf(SoulStore.loadContainers(application))
     val workspacesState = mutableStateOf(
@@ -52,18 +52,22 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     fun updatePromptDelegate(delegate: GeckoSession.PromptDelegate?) {
         currentPromptDelegate = delegate
-        tabsState.value.forEach { tab -> tab.session?.promptDelegate = delegate }
+        tabsState.value.forEach { tab ->
+            tab.session?.promptDelegate = delegate
+        }
     }
 
     /**
-     * Creates and opens a GeckoSession for a tab. Delegates resolve their current
-     * UI callbacks through this ViewModel, avoiding stale Activity references.
+     * Creates a GeckoSession wired to this ViewModel's callbacks.
+     * Set openImmediately = false when returning a session to NavigationDelegate.onNewSession,
+     * because GeckoView opens popup/new-window sessions internally.
      */
     fun createSession(
         runtime: GeckoRuntime,
-        tab: SoulTab,
+        tabId: String,
         container: BrowserContainer,
-        isSelected: Boolean
+        isSelected: Boolean,
+        openImmediately: Boolean = true
     ): GeckoSession {
         val settings = GeckoSessionSettings.Builder()
             .contextId(container.id)
@@ -71,34 +75,80 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             .useTrackingProtection(true)
             .suspendMediaWhenInactive(true)
             .build()
+
         return GeckoSession(settings).also { session ->
-            val tabId = tab.id
             session.progressDelegate = object : GeckoSession.ProgressDelegate {
-                override fun onPageStart(session: GeckoSession, pageUrl: String) {
-                    sessionCallbacks?.onPageStart?.invoke(tabId, pageUrl)
+                override fun onPageStart(session: GeckoSession, url: String) {
+                    sessionCallbacks?.onPageStart?.invoke(tabId, url)
+                }
+
+                override fun onPageStop(session: GeckoSession, success: Boolean) {
+                    sessionCallbacks?.onPageStop?.invoke(tabId, success)
+                }
+
+                override fun onProgressChange(session: GeckoSession, progress: Int) {
+                    sessionCallbacks?.onProgressChange?.invoke(tabId, progress)
                 }
             }
+
             session.contentDelegate = object : GeckoSession.ContentDelegate {
                 override fun onTitleChange(session: GeckoSession, title: String?) {
                     sessionCallbacks?.onTitleChange?.invoke(tabId, title)
                 }
+
                 override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
                     sessionCallbacks?.onExternalResponse?.invoke(response)
                 }
             }
+
             session.navigationDelegate = object : GeckoSession.NavigationDelegate {
                 override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
                     sessionCallbacks?.onNavigationState?.invoke(tabId, canGoBack, null)
                 }
+
                 override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {
                     sessionCallbacks?.onNavigationState?.invoke(tabId, null, canGoForward)
                 }
+
+                override fun onLocationChange(
+                    session: GeckoSession,
+                    url: String?,
+                    perms: List<GeckoSession.PermissionDelegate.ContentPermission>,
+                    hasUserGesture: Boolean
+                ) {
+                    if (!url.isNullOrBlank()) {
+                        sessionCallbacks?.onLocationChange?.invoke(tabId, url)
+                    }
+                }
+
+                override fun onNewSession(
+                    session: GeckoSession,
+                    uri: String
+                ): GeckoResult<GeckoSession>? {
+                    val created = sessionCallbacks?.onNewSession?.invoke(tabId, uri) ?: return null
+                    return GeckoResult.fromValue(created)
+                }
             }
+
             session.promptDelegate = currentPromptDelegate
-            session.open(runtime)
-            session.setActive(isSelected)
-            session.setFocused(isSelected)
+
+            if (openImmediately) {
+                session.open(runtime)
+                session.setActive(isSelected)
+                session.setFocused(isSelected)
+            }
         }
+    }
+
+    fun persistCurrentTabs() {
+        val privateContainerIds = containersState.value
+            .filter { it.isPrivate }
+            .map { it.id }
+            .toSet()
+        val persistentTabs = tabsState.value
+            .filterNot { it.containerId in privateContainerIds }
+            .map { SavedTab(it.id, it.title, it.url, it.workspaceId, it.containerId) }
+        persistTabs(persistentTabs)
     }
 
     fun persistTabs(items: List<SavedTab>) {
@@ -113,21 +163,29 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         persistJob?.cancel()
         sessionCallbacks = null
         currentPromptDelegate = null
+
         pendingFilePromptState.value?.let { pending ->
             if (!pending.prompt.isComplete) {
                 pending.result.complete(pending.prompt.dismiss())
             }
         }
         pendingFilePromptState.value = null
-        pendingDownloadState.value?.body?.close()
+
+        runCatching { pendingDownloadState.value?.body?.close() }
         pendingDownloadState.value = null
-        val persistentTabs = tabsState.value.filterNot { tab ->
-            containersState.value.firstOrNull { it.id == tab.containerId }?.isPrivate == true
-        }.map { tab ->
-            SavedTab(tab.id, tab.title, tab.url, tab.workspaceId, tab.containerId)
-        }
+
+        val privateContainerIds = containersState.value
+            .filter { it.isPrivate }
+            .map { it.id }
+            .toSet()
+        val persistentTabs = tabsState.value
+            .filterNot { it.containerId in privateContainerIds }
+            .map { SavedTab(it.id, it.title, it.url, it.workspaceId, it.containerId) }
         SoulStore.saveTabs(getApplication(), persistentTabs)
-        tabsState.value.forEach { it.session?.close() }
+
+        tabsState.value.forEach { tab ->
+            runCatching { tab.session?.close() }
+        }
         super.onCleared()
     }
 }
