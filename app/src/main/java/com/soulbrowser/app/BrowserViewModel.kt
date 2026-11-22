@@ -12,6 +12,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+data class BrowserSessionCallbacks(
+    val onPageStart: (String, String) -> Unit,
+    val onTitleChange: (String, String?) -> Unit,
+    val onExternalResponse: (WebResponse) -> Unit,
+    val onNavigationState: (String, Boolean?, Boolean?) -> Unit
+)
+
 /**
  * Debounces tab metadata writes so redirects and title changes do not repeatedly
  * serialize the complete tab list to SharedPreferences.
