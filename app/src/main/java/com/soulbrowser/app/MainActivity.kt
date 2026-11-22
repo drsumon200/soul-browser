@@ -156,8 +156,8 @@ private fun SoulApp(runtime: GeckoRuntime) {
             },
             onNavigationState = { tabId, canGoBack, canGoForward ->
                 if (activeTabId == tabId) {
-                    canNavigateBack = canGoBack
-                    canNavigateForward = canGoForward
+                    canGoBack?.let { canNavigateBack = it }
+                    canGoForward?.let { canNavigateForward = it }
                 }
             }
         )

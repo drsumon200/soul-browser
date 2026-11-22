@@ -41,7 +41,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         onPageStart: (String, String) -> Unit,
         onTitleChange: (String, String?) -> Unit,
         onExternalResponse: (WebResponse) -> Unit,
-        onNavigationState: (String, Boolean, Boolean) -> Unit
+        onNavigationState: (String, Boolean?, Boolean?) -> Unit
     ): GeckoSession {
         val settings = GeckoSessionSettings.Builder()
             .contextId(container.id)
@@ -66,10 +66,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             }
             session.navigationDelegate = object : GeckoSession.NavigationDelegate {
                 override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
-                    onNavigationState(tabId, canGoBack, false)
+                    onNavigationState(tabId, canGoBack, null)
                 }
                 override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {
-                    onNavigationState(tabId, false, canGoForward)
+                    onNavigationState(tabId, null, canGoForward)
                 }
             }
             session.open(runtime)
