@@ -19,7 +19,7 @@ Repository: https://github.com/drsumon200/soul-browser
 - JavaScript alert and confirm prompts, HTML select prompts, single/multiple file pickers.
 - Download response handling through GeckoView ContentDelegate and Android's document save picker.
 - Per-container site-data clearing closes that container's sessions before calling StorageController.clearDataForSessionContext.
-- BrowserViewModel owns core tab/workspace/container/bookmark state and debounces tab metadata writes by 500 ms.
+- BrowserViewModel owns core tab/workspace/container/bookmark state, creates GeckoSessions, wires progress/content/navigation delegates, and debounces tab metadata writes by 500 ms. Prompt UI and Android Activity Result launchers remain Activity-scoped.
 - Thumb-friendly bottom navigation: horizontal swipe switches workspaces and upward swipe opens the tab drawer.
 - Tracking protection enabled by default; background sessions are deactivated and media suspension requested.
 
