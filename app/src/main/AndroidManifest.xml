@@ -2,6 +2,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application
+        android:name=".SoulApplication"
         android:allowBackup="false"
         android:label="Soul Browser"
         android:theme="@style/Theme.SoulBrowser"

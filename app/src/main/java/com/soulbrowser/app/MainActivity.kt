@@ -3,6 +3,8 @@ package com.soulbrowser.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,24 +40,27 @@ private val Lavender = Color(0xFFA7B5FF)
 private val Muted = Color(0xFF9BA0B1)
 
 class MainActivity : ComponentActivity() {
-    private var runtime: GeckoRuntime? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        runtime = GeckoRuntime.create(this)
-        setContent { SoulApp(runtime = runtime!!) }
-    }
-    override fun onDestroy() {
-        super.onDestroy()
-        // GeckoRuntime is process-scoped; do not shut it down while sessions may be restored.
+        val runtime = (application as SoulApplication).geckoRuntime
+        setContent { SoulApp(runtime = runtime) }
     }
 }
 
-private data class SoulTab(val id: String, val title: String, val url: String, val session: GeckoSession, val workspaceId: String, val containerId: String)
+private data class SoulTab(
+    val id: String,
+    val title: String,
+    val url: String,
+    val session: GeckoSession?,
+    val workspaceId: String,
+    val containerId: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SoulApp(runtime: GeckoRuntime) {
     val context = LocalContext.current
+    val browserViewModel: BrowserViewModel = viewModel()
     var containers by remember { mutableStateOf(SoulStore.loadContainers(context)) }
     var workspaces by remember { mutableStateOf(SoulStore.loadWorkspaces(context, containers.first().id)) }
     var activeContainer by remember { mutableStateOf(containers.first()) }
@@ -63,6 +68,8 @@ private fun SoulApp(runtime: GeckoRuntime) {
     var tabs by remember { mutableStateOf(listOf<SoulTab>()) }
     var bookmarks by remember { mutableStateOf(SoulStore.loadBookmarks(context)) }
     var activeTabId by remember { mutableStateOf<String?>(null) }
+    var canNavigateBack by remember { mutableStateOf(false) }
+    var canNavigateForward by remember { mutableStateOf(false) }
     var address by remember { mutableStateOf("") }
     var showTabs by remember { mutableStateOf(false) }
     var showSpaces by remember { mutableStateOf(false) }
@@ -74,40 +81,66 @@ private fun SoulApp(runtime: GeckoRuntime) {
 
     fun persistTabs() {
         // Never persist private tabs or their URLs to app preferences.
-        SoulStore.saveTabs(context, tabs.filterNot { tab -> containers.firstOrNull { it.id == tab.containerId }?.isPrivate == true }
-            .map { SavedTab(it.id, it.title, it.url, it.workspaceId, it.containerId) })
+        browserViewModel.persistTabs(
+            tabs.filterNot { tab -> containers.firstOrNull { it.id == tab.containerId }?.isPrivate == true }
+                .map { SavedTab(it.id, it.title, it.url, it.workspaceId, it.containerId) }
+        )
     }
 
-    fun restoreSavedTabs() {
-        if (tabs.isNotEmpty()) return
-        val saved = SoulStore.loadTabs(context).filter { saved ->
-            workspaces.any { it.id == saved.workspaceId } && containers.any { it.id == saved.containerId && !it.isPrivate }
-        }
-        saved.forEach { item ->
-            val container = containers.first { it.id == item.containerId }
-            val settings = GeckoSessionSettings.Builder()
-                .contextId(container.id)
-                .usePrivateMode(container.isPrivate)
-                .useTrackingProtection(true)
-                .suspendMediaWhenInactive(true)
-                .build()
-            val session = GeckoSession(settings)
-            val tabId = item.id
+    fun createSession(tab: SoulTab): GeckoSession {
+        val container = containers.firstOrNull { it.id == tab.containerId } ?: containers.first()
+        val settings = GeckoSessionSettings.Builder()
+            .contextId(container.id)
+            .usePrivateMode(container.isPrivate)
+            .useTrackingProtection(true)
+            .suspendMediaWhenInactive(true)
+            .build()
+        return GeckoSession(settings).also { session ->
+            val tabId = tab.id
             session.progressDelegate = object : GeckoSession.ProgressDelegate {
                 override fun onPageStart(session: GeckoSession, pageUrl: String) {
-                    tabs = tabs.map { tab -> if (tab.id == tabId) tab.copy(url = pageUrl) else tab }
+                    tabs = tabs.map { current -> if (current.id == tabId) current.copy(url = pageUrl) else current }
                     persistTabs()
                     if (activeTabId == tabId) address = pageUrl
                 }
             }
             session.contentDelegate = object : GeckoSession.ContentDelegate {
                 override fun onTitleChange(session: GeckoSession, title: String?) {
-                    tabs = tabs.map { tab -> if (tab.id == tabId) tab.copy(title = title?.takeIf { it.isNotBlank() } ?: tab.url) else tab }
+                    tabs = tabs.map { current ->
+                        if (current.id == tabId) current.copy(title = title?.takeIf { it.isNotBlank() } ?: current.url) else current
+                    }
                     persistTabs()
                 }
             }
+            session.navigationDelegate = object : GeckoSession.NavigationDelegate {
+                override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
+                    if (activeTabId == tabId) canNavigateBack = canGoBack
+                }
+                override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {
+                    if (activeTabId == tabId) canNavigateForward = canGoForward
+                }
+            }
             session.open(runtime)
-            tabs = tabs + SoulTab(item.id, item.title, item.url, session, item.workspaceId, item.containerId)
+        }
+    }
+
+    fun ensureSession(tabId: String): GeckoSession? {
+        val tab = tabs.firstOrNull { it.id == tabId } ?: return null
+        tab.session?.let { return it }
+        val session = createSession(tab)
+        tabs = tabs.map { current -> if (current.id == tabId) current.copy(session = session) else current }
+        if (tab.url != "about:blank") session.loadUri(tab.url)
+        return session
+    }
+
+    fun restoreSavedTabs() {
+        if (tabs.isNotEmpty()) return
+        val saved = SoulStore.loadTabs(context).filter { item ->
+            workspaces.any { it.id == item.workspaceId } &&
+                containers.any { it.id == item.containerId && !it.isPrivate }
+        }
+        tabs = saved.map { item ->
+            SoulTab(item.id, item.title, item.url, null, item.workspaceId, item.containerId)
         }
         val first = tabs.lastOrNull { it.workspaceId == activeWorkspace.id } ?: tabs.lastOrNull()
         if (first != null) {
@@ -115,7 +148,6 @@ private fun SoulApp(runtime: GeckoRuntime) {
             activeContainer = containers.firstOrNull { it.id == first.containerId } ?: activeContainer
             activeTabId = first.id
             address = first.url.takeUnless { it == "about:blank" } ?: ""
-            if (first.url != "about:blank") first.session.loadUri(first.url)
         }
     }
 
@@ -126,46 +158,38 @@ private fun SoulApp(runtime: GeckoRuntime) {
     ) {
         val container = containerOverride ?: if (workspace.id == activeWorkspace.id) activeContainer
             else containers.firstOrNull { it.id == workspace.containerId } ?: activeContainer
-        val settings = GeckoSessionSettings.Builder()
-            .contextId(container.id)
-            .usePrivateMode(container.isPrivate)
-            .useTrackingProtection(true)
-            .suspendMediaWhenInactive(true)
-            .build()
-        val session = GeckoSession(settings)
-        val tabId = UUID.randomUUID().toString()
-        session.progressDelegate = object : GeckoSession.ProgressDelegate {
-            override fun onPageStart(session: GeckoSession, pageUrl: String) {
-                tabs = tabs.map { tab ->
-                    if (tab.id == tabId) tab.copy(url = pageUrl) else tab
-                }
-                persistTabs()
-                if (activeTabId == tabId) address = pageUrl
-            }
-        }
-        session.contentDelegate = object : GeckoSession.ContentDelegate {
-            override fun onTitleChange(session: GeckoSession, title: String?) {
-                tabs = tabs.map { tab ->
-                    if (tab.id == tabId) tab.copy(title = title?.takeIf { it.isNotBlank() } ?: tab.url) else tab
-                }
-                persistTabs()
-            }
-        }
-        session.open(runtime)
-        val tab = SoulTab(tabId, "New Tab", url, session, workspace.id, container.id)
+        val tab = SoulTab(
+            id = UUID.randomUUID().toString(),
+            title = "New Tab",
+            url = url,
+            session = null,
+            workspaceId = workspace.id,
+            containerId = container.id
+        )
         tabs = tabs + tab
         persistTabs()
         activeTabId = tab.id
         address = if (url == "about:blank") "" else url
-        if (url != "about:blank") session.loadUri(url)
     }
 
     val activeTab = tabs.firstOrNull { it.id == activeTabId && it.workspaceId == activeWorkspace.id }
+    BackHandler(enabled = canNavigateBack) {
+        activeTab?.session?.goBack()
+    }
     LaunchedEffect(activeTabId, activeWorkspace.id, tabs.size) {
+        val selectedId = activeTabId
+        if (selectedId != null && tabs.any { it.id == selectedId && it.session == null }) {
+            ensureSession(selectedId)
+        }
+        val visibleId = tabs.firstOrNull { it.id == activeTabId && it.workspaceId == activeWorkspace.id }?.id
         tabs.forEach { tab ->
-            val isVisible = tab.id == activeTab?.id
-            tab.session.setActive(isVisible)
-            tab.session.setFocused(isVisible)
+            val isVisible = tab.id == visibleId
+            tab.session?.setActive(isVisible)
+            tab.session?.setFocused(isVisible)
+        }
+        if (visibleId == null) {
+            canNavigateBack = false
+            canNavigateForward = false
         }
     }
     LaunchedEffect(Unit) {
@@ -234,7 +258,7 @@ private fun SoulApp(runtime: GeckoRuntime) {
                 }
                 Spacer(Modifier.height(10.dp))
 
-                if (activeTab == null || activeTab.url == "about:blank") {
+                if (activeTab == null || activeTab.session == null || activeTab.url == "about:blank") {
                     HomePanel(
                         activeContainer = activeContainer,
                         onOpen = { address = it; val target = normalizeAddress(it); if (activeTab == null) createTab(target) else activeTab.session.loadUri(target); address = target },
@@ -244,16 +268,22 @@ private fun SoulApp(runtime: GeckoRuntime) {
                     key(activeTab.id) {
                         AndroidView(
                             modifier = Modifier.weight(1f).fillMaxWidth(),
-                            factory = { view -> GeckoView(view).apply { setSession(activeTab.session) } },
-                            update = { it.setSession(activeTab.session) }
+                            factory = { view -> GeckoView(view).apply { setSession(activeTab.session!!) } },
+                            update = { geckoView ->
+                                if (geckoView.session !== activeTab.session) {
+                                    geckoView.releaseSession()
+                                    geckoView.setSession(activeTab.session!!)
+                                }
+                            },
+                            onRelease = { geckoView -> geckoView.releaseSession() }
                         )
                     }
                 }
 
                 // Floating bottom navigation, compact and thumb-friendly.
                 Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp).clip(RoundedCornerShape(22.dp)).background(Panel).padding(horizontal = 10.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    IconButton(onClick = { activeTab?.session?.goBack() }) { Icon(Icons.Default.ArrowBack, "Back", tint = Color.White) }
-                    IconButton(onClick = { activeTab?.session?.goForward() }) { Icon(Icons.Default.ArrowForward, "Forward", tint = Color.White) }
+                    IconButton(onClick = { activeTab?.session?.goBack() }, enabled = canNavigateBack) { Icon(Icons.Default.ArrowBack, "Back", tint = Color.White) }
+                    IconButton(onClick = { activeTab?.session?.goForward() }, enabled = canNavigateForward) { Icon(Icons.Default.ArrowForward, "Forward", tint = Color.White) }
                     IconButton(onClick = { activeTab?.session?.reload() }) { Icon(Icons.Default.Refresh, "Reload", tint = Color.White) }
                     IconButton(onClick = { createTab() }) { Icon(Icons.Default.Add, "New tab", tint = Lavender) }
                     IconButton(onClick = { showTabs = true }) { Icon(Icons.Default.GridView, "Tab overview", tint = Color.White) }
@@ -276,7 +306,7 @@ private fun SoulApp(runtime: GeckoRuntime) {
                             Icon(Icons.Default.Language, null, tint = Lavender)
                             Spacer(Modifier.width(10.dp))
                             Text(tab.title.ifBlank { tab.url.ifBlank { "New Tab" } }, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            IconButton(onClick = { tab.session.close(); tabs = tabs.filterNot { it.id == tab.id }; persistTabs(); if (activeTabId == tab.id) activeTabId = tabs.lastOrNull { it.workspaceId == activeWorkspace.id }?.id }) { Icon(Icons.Default.Close, "Close tab", tint = Muted) }
+                            IconButton(onClick = { tab.session?.close(); tabs = tabs.filterNot { it.id == tab.id }; persistTabs(); if (activeTabId == tab.id) activeTabId = tabs.lastOrNull { it.workspaceId == activeWorkspace.id }?.id }) { Icon(Icons.Default.Close, "Close tab", tint = Muted) }
                         }
                     }
                     TextButton(onClick = { createTab(); showTabs = false }) { Text("+ New tab") }
@@ -426,6 +456,6 @@ private fun normalizeAddress(raw: String): String {
     if (value.isBlank()) return ""
     if (value.contains(" ")) return "https://www.google.com/search?q=" + java.net.URLEncoder.encode(value, "UTF-8")
     if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("about:")) return value
-    if (value.contains('.') && !value.contains('/')) return "https://$value"
+    if (value.startsWith("www.", ignoreCase = true) || value.matches(Regex("(?i)^[a-z0-9-]+(\\.[a-z0-9-]+)+(:[0-9]{1,5})?(/.*)?$"))) return "https://$value"
     return "https://www.google.com/search?q=" + java.net.URLEncoder.encode(value, "UTF-8")
 }
