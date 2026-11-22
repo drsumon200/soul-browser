@@ -637,6 +637,8 @@ private fun SoulApp(
                 activeTabId = fallback?.id
                 if (fallback != null) {
                     activeContainer = containers.firstOrNull { it.id == fallback.containerId } ?: activeContainer
+                } else {
+                    createTab()
                 }
             }
             browserViewModel.persistCurrentTabs()
