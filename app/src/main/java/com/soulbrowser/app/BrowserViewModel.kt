@@ -88,6 +88,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onCleared() {
         persistJob?.cancel()
+        val persistentTabs = tabsState.value.filterNot { tab ->
+            containersState.value.firstOrNull { it.id == tab.containerId }?.isPrivate == true
+        }.map { tab ->
+            SavedTab(tab.id, tab.title, tab.url, tab.workspaceId, tab.containerId)
+        }
+        SoulStore.saveTabs(getApplication(), persistentTabs)
+        tabsState.value.forEach { it.session?.close() }
         super.onCleared()
     }
 }
