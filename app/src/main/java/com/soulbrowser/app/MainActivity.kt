@@ -654,19 +654,25 @@ private fun SoulApp(
         }
     }
 
-    LaunchedEffect(activeTab?.id, activeTab?.session, permissionDelegate, settings.desktopModeDefault, settings.trackingProtection) {
-        val tab = activeTab ?: return@LaunchedEffect
-        val session = tab.session ?: return@LaunchedEffect
-        BrowserSessionEnhancer.attach(
-            activity = activity,
-            runtime = runtime,
-            tabId = tab.id,
-            session = session,
-            permissionDelegate = permissionDelegate,
-            desktopModeDefault = settings.desktopModeDefault,
-            hooks = enhancementHooks,
-            trackingProtection = settings.trackingProtection
-        )
+    LaunchedEffect(
+        tabs.map { it.id to it.session },
+        permissionDelegate,
+        settings.desktopModeDefault,
+        settings.trackingProtection
+    ) {
+        tabs.forEach { tab ->
+            val session = tab.session ?: return@forEach
+            BrowserSessionEnhancer.attach(
+                activity = activity,
+                runtime = runtime,
+                tabId = tab.id,
+                session = session,
+                permissionDelegate = permissionDelegate,
+                desktopModeDefault = settings.desktopModeDefault,
+                hooks = enhancementHooks,
+                trackingProtection = settings.trackingProtection
+            )
+        }
     }
 
     LaunchedEffect(incomingUrl) {
