@@ -129,39 +129,8 @@ private fun SoulApp(runtime: GeckoRuntime) {
         )
     }
 
-    fun createSession(tab: SoulTab): GeckoSession {
-        val container = containers.firstOrNull { it.id == tab.containerId } ?: containers.first()
-        val session = browserViewModel.createSession(
-            runtime = runtime,
-            tab = tab,
-            container = container,
-            isSelected = tab.id == activeTabId,
-            onPageStart = { tabId, pageUrl ->
-                tabs = tabs.map { current -> if (current.id == tabId) current.copy(url = pageUrl) else current }
-                persistTabs()
-                if (activeTabId == tabId) address = pageUrl
-            },
-            onTitleChange = { tabId, title ->
-                tabs = tabs.map { current ->
-                    if (current.id == tabId) current.copy(title = title?.takeIf { it.isNotBlank() } ?: current.url) else current
-                }
-                persistTabs()
-            },
-            onExternalResponse = { response ->
-                pendingDownload = response
-                val suggestedName = Uri.parse(response.uri).lastPathSegment
-                    ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
-                    ?.takeIf { it.isNotBlank() } ?: "download"
-                downloadPicker.launch(suggestedName)
-            },
-            onNavigationState = { tabId, canGoBack, canGoForward ->
-                if (activeTabId == tabId) {
-                    canGoBack?.let { canNavigateBack = it }
-                    canGoForward?.let { canNavigateForward = it }
-                }
-            }
-        )
-            session.promptDelegate = object : GeckoSession.PromptDelegate {
+    val browserPromptDelegate = remember {
+        object : GeckoSession.PromptDelegate {
                 override fun onAlertPrompt(
                     session: GeckoSession,
                     prompt: GeckoSession.PromptDelegate.AlertPrompt
@@ -238,8 +207,52 @@ private fun SoulApp(runtime: GeckoRuntime) {
                     return result
                 }
             }
+    }
 
-        return session
+    DisposableEffect(browserViewModel, browserPromptDelegate) {
+        browserViewModel.updatePromptDelegate(browserPromptDelegate)
+        browserViewModel.updateSessionCallbacks(
+            BrowserSessionCallbacks(
+                onPageStart = { tabId, pageUrl ->
+                    tabs = tabs.map { current -> if (current.id == tabId) current.copy(url = pageUrl) else current }
+                    persistTabs()
+                    if (activeTabId == tabId) address = pageUrl
+                },
+                onTitleChange = { tabId, title ->
+                    tabs = tabs.map { current ->
+                        if (current.id == tabId) current.copy(title = title?.takeIf { it.isNotBlank() } ?: current.url) else current
+                    }
+                    persistTabs()
+                },
+                onExternalResponse = { response ->
+                    pendingDownload = response
+                    val suggestedName = Uri.parse(response.uri).lastPathSegment
+                        ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
+                        ?.takeIf { it.isNotBlank() } ?: "download"
+                    downloadPicker.launch(suggestedName)
+                },
+                onNavigationState = { tabId, canGoBack, canGoForward ->
+                    if (activeTabId == tabId) {
+                        canGoBack?.let { canNavigateBack = it }
+                        canGoForward?.let { canNavigateForward = it }
+                    }
+                }
+            )
+        )
+        onDispose {
+            browserViewModel.updatePromptDelegate(null)
+            browserViewModel.updateSessionCallbacks(null)
+        }
+    }
+
+    fun createSession(tab: SoulTab): GeckoSession {
+        val container = containers.firstOrNull { it.id == tab.containerId } ?: containers.first()
+        return browserViewModel.createSession(
+            runtime = runtime,
+            tab = tab,
+            container = container,
+            isSelected = tab.id == activeTabId
+        )
     }
 
     fun ensureSession(tabId: String): GeckoSession? {

@@ -28,20 +28,27 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val activeTabIdState = mutableStateOf<String?>(null)
 
     private var persistJob: Job? = null
+    private var sessionCallbacks: BrowserSessionCallbacks? = null
+    private var currentPromptDelegate: GeckoSession.PromptDelegate? = null
+
+    fun updateSessionCallbacks(callbacks: BrowserSessionCallbacks?) {
+        sessionCallbacks = callbacks
+    }
+
+    fun updatePromptDelegate(delegate: GeckoSession.PromptDelegate?) {
+        currentPromptDelegate = delegate
+        tabsState.value.forEach { tab -> tab.session?.promptDelegate = delegate }
+    }
 
     /**
-     * Creates and opens a GeckoSession for a tab. Session delegates are centralized
-     * here so Activity recreation does not duplicate browser-engine lifecycle logic.
+     * Creates and opens a GeckoSession for a tab. Delegates resolve their current
+     * UI callbacks through this ViewModel, avoiding stale Activity references.
      */
     fun createSession(
         runtime: GeckoRuntime,
         tab: SoulTab,
         container: BrowserContainer,
-        isSelected: Boolean,
-        onPageStart: (String, String) -> Unit,
-        onTitleChange: (String, String?) -> Unit,
-        onExternalResponse: (WebResponse) -> Unit,
-        onNavigationState: (String, Boolean?, Boolean?) -> Unit
+        isSelected: Boolean
     ): GeckoSession {
         val settings = GeckoSessionSettings.Builder()
             .contextId(container.id)
@@ -53,25 +60,26 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             val tabId = tab.id
             session.progressDelegate = object : GeckoSession.ProgressDelegate {
                 override fun onPageStart(session: GeckoSession, pageUrl: String) {
-                    onPageStart(tabId, pageUrl)
+                    sessionCallbacks?.onPageStart?.invoke(tabId, pageUrl)
                 }
             }
             session.contentDelegate = object : GeckoSession.ContentDelegate {
                 override fun onTitleChange(session: GeckoSession, title: String?) {
-                    onTitleChange(tabId, title)
+                    sessionCallbacks?.onTitleChange?.invoke(tabId, title)
                 }
                 override fun onExternalResponse(session: GeckoSession, response: WebResponse) {
-                    onExternalResponse(response)
+                    sessionCallbacks?.onExternalResponse?.invoke(response)
                 }
             }
             session.navigationDelegate = object : GeckoSession.NavigationDelegate {
                 override fun onCanGoBack(session: GeckoSession, canGoBack: Boolean) {
-                    onNavigationState(tabId, canGoBack, null)
+                    sessionCallbacks?.onNavigationState?.invoke(tabId, canGoBack, null)
                 }
                 override fun onCanGoForward(session: GeckoSession, canGoForward: Boolean) {
-                    onNavigationState(tabId, null, canGoForward)
+                    sessionCallbacks?.onNavigationState?.invoke(tabId, null, canGoForward)
                 }
             }
+            session.promptDelegate = currentPromptDelegate
             session.open(runtime)
             session.setActive(isSelected)
             session.setFocused(isSelected)
@@ -88,6 +96,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     override fun onCleared() {
         persistJob?.cancel()
+        sessionCallbacks = null
+        currentPromptDelegate = null
         val persistentTabs = tabsState.value.filterNot { tab ->
             containersState.value.firstOrNull { it.id == tab.containerId }?.isPrivate == true
         }.map { tab ->
