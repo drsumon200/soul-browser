@@ -718,8 +718,9 @@ private fun SoulApp(
                     .padding(padding)
                     .background(Ink)
             ) {
-                // Zen-inspired compact top bar and workspace switcher.
-                Row(
+                if (!isFullscreen && !settings.compactMode) {
+                    // Zen-inspired compact top bar and workspace switcher.
+                    Row(
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 10.dp),
@@ -762,6 +763,9 @@ private fun SoulApp(
                     }
                 }
 
+                }
+
+                if (!isFullscreen) {
                 // Address bar
                 Row(
                     Modifier
@@ -858,6 +862,8 @@ private fun SoulApp(
                     Spacer(Modifier.height(10.dp))
                 }
 
+                }
+
                 // Main content area (HomePanel or single reused GeckoView)
                 val activeSession = activeTab?.session
                 if (activeTab == null || activeSession == null || activeTab.url == "about:blank") {
@@ -901,6 +907,7 @@ private fun SoulApp(
                     )
                 }
 
+                if (!isFullscreen) {
                 // Floating bottom navigation, compact and thumb-friendly.
                 Row(
                     Modifier
@@ -989,6 +996,7 @@ private fun SoulApp(
                     IconButton(onClick = { showTabs = true }) {
                         Icon(Icons.Default.GridView, "Tab overview", tint = Color.White)
                     }
+                }
                 }
             }
         }
