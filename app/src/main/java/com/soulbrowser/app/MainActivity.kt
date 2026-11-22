@@ -220,7 +220,7 @@ private fun SoulApp(
         pendingPermCallback?.invoke(results.values.all { it })
         pendingPermCallback = null
     }
-    val permissionDelegate = remember(context) {
+    val permissionDelegate = remember(context, settings.blockAudibleAutoplay) {
         SoulPermissionDelegate(
             context = context,
             blockAudibleAutoplayProvider = { settings.blockAudibleAutoplay },
@@ -645,7 +645,7 @@ private fun SoulApp(
         }
     }
 
-    LaunchedEffect(activeTab?.id, activeTab?.session) {
+    LaunchedEffect(activeTab?.id, activeTab?.session, permissionDelegate, settings.desktopModeDefault, settings.trackingProtection) {
         val tab = activeTab ?: return@LaunchedEffect
         val session = tab.session ?: return@LaunchedEffect
         BrowserSessionEnhancer.attach(
@@ -777,12 +777,19 @@ private fun SoulApp(
                         .padding(horizontal = 12.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(Color(activeContainer.color))
-                    )
+                    if (activeTab?.url?.startsWith("https://", ignoreCase = true) == true) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = "HTTPS connection",
+                            tint = if (secureByTabId[activeTab.id] == true) Color(0xFF8BD5CA) else Muted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    } else {
+                        Box(
+                            Modifier.size(8.dp).clip(CircleShape)
+                                .background(Color(activeContainer.color))
+                        )
+                    }
                     Spacer(Modifier.width(8.dp))
                     BasicTextField(
                         value = address,
