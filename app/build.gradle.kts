@@ -14,18 +14,25 @@ android {
         applicationId = "com.soulbrowser.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4.0-alpha"
+        versionCode = 5
+        versionName = "0.5.0-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // Honor 200 uses a 64-bit ARM platform. Keep the initial APK focused on that ABI.
+        // The current target device is Honor 200 (64-bit ARM).
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
     buildTypes {
-        debug { applicationIdSuffix = ".debug"; versionNameSuffix = "-debug" }
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
-            isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
@@ -58,6 +65,6 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
 
-    // GeckoView stable release compatible with Android API 36.
+    // GeckoView is the dominant binary-size component of this browser.
     implementation("org.mozilla.geckoview:geckoview:150.0.20260506140522")
 }
