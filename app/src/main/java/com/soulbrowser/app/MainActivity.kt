@@ -236,6 +236,7 @@ private fun SoulApp(
     var isAddressFocused by remember { mutableStateOf(false) }
     var showTabs by remember { mutableStateOf(false) }
     var showSpaces by remember { mutableStateOf(false) }
+    var editingWorkspace by remember { mutableStateOf<BrowserWorkspace?>(null) }
     var showContainers by remember { mutableStateOf(false) }
     var showBookmarks by remember { mutableStateOf(false) }
     var confirmClearContainer by remember { mutableStateOf<BrowserContainer?>(null) }
@@ -1178,6 +1179,9 @@ private fun SoulApp(
                                     )
                                     Spacer(Modifier.width(12.dp))
                                     Text(space.name, Modifier.weight(1f))
+                                    IconButton(onClick = { editingWorkspace = space }) {
+                                        Icon(Icons.Default.Edit, "Edit workspace", tint = Muted)
+                                    }
                                     if (space.id == activeWorkspace.id) {
                                         Icon(Icons.Default.Check, null, tint = Lavender)
                                     }
@@ -1198,6 +1202,36 @@ private fun SoulApp(
                 confirmButton = {
                     TextButton(onClick = { showSpaces = false }) { Text("Close") }
                 }
+            )
+        }
+
+        editingWorkspace?.let { targetWorkspace ->
+            RenameWorkspaceDialog(
+                workspace = targetWorkspace,
+                canDelete = workspaces.size > 1,
+                onRename = { newWorkspaceName ->
+                    workspaces = workspaces.map { item ->
+                        if (item.id == targetWorkspace.id) item.copy(name = newWorkspaceName) else item
+                    }
+                    SoulStore.saveWorkspaces(context, workspaces)
+                    if (activeWorkspace.id == targetWorkspace.id) {
+                        activeWorkspace = activeWorkspace.copy(name = newWorkspaceName)
+                    }
+                },
+                onDelete = {
+                    val remainingWorkspaces = workspaces.filterNot { it.id == targetWorkspace.id }
+                    tabs.filter { it.workspaceId == targetWorkspace.id }.forEach {
+                        runCatching { it.session?.close() }
+                    }
+                    tabs = tabs.filterNot { it.workspaceId == targetWorkspace.id }
+                    workspaces = remainingWorkspaces
+                    SoulStore.saveWorkspaces(context, remainingWorkspaces)
+                    browserViewModel.persistCurrentTabs()
+                    if (activeWorkspace.id == targetWorkspace.id) {
+                        switchWorkspace(remainingWorkspaces.first())
+                    }
+                },
+                onDismiss = { editingWorkspace = null }
             )
         }
 
