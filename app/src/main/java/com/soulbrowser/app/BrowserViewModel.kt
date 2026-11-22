@@ -12,6 +12,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+data class PendingFilePrompt(
+    val prompt: GeckoSession.PromptDelegate.FilePrompt,
+    val result: GeckoResult<GeckoSession.PromptDelegate.PromptResponse>
+)
+
 data class BrowserSessionCallbacks(
     val onPageStart: (String, String) -> Unit,
     val onTitleChange: (String, String?) -> Unit,
@@ -33,6 +38,8 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val tabsState = mutableStateOf<List<SoulTab>>(emptyList())
     val bookmarksState = mutableStateOf(SoulStore.loadBookmarks(application))
     val activeTabIdState = mutableStateOf<String?>(null)
+    val pendingFilePromptState = mutableStateOf<PendingFilePrompt?>(null)
+    val pendingDownloadState = mutableStateOf<WebResponse?>(null)
 
     private var persistJob: Job? = null
     private var sessionCallbacks: BrowserSessionCallbacks? = null
@@ -105,6 +112,14 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         persistJob?.cancel()
         sessionCallbacks = null
         currentPromptDelegate = null
+        pendingFilePromptState.value?.let { pending ->
+            if (!pending.prompt.isComplete) {
+                pending.result.complete(pending.prompt.dismiss())
+            }
+        }
+        pendingFilePromptState.value = null
+        pendingDownloadState.value?.body?.close()
+        pendingDownloadState.value = null
         val persistentTabs = tabsState.value.filterNot { tab ->
             containersState.value.firstOrNull { it.id == tab.containerId }?.isPrivate == true
         }.map { tab ->

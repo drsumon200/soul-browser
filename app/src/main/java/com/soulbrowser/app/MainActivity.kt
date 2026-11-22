@@ -60,19 +60,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private data class PendingFilePrompt(
-    val prompt: GeckoSession.PromptDelegate.FilePrompt,
-    val result: GeckoResult<GeckoSession.PromptDelegate.PromptResponse>
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SoulApp(runtime: GeckoRuntime) {
     val context = LocalContext.current
     val browserViewModel: BrowserViewModel = viewModel()
     val coroutineScope = rememberCoroutineScope()
-    var pendingFilePrompt by remember { mutableStateOf<PendingFilePrompt?>(null) }
-    var pendingDownload by remember { mutableStateOf<WebResponse?>(null) }
+    var pendingFilePrompt by browserViewModel.pendingFilePromptState
+    var pendingDownload by browserViewModel.pendingDownloadState
     val singleFilePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         pendingFilePrompt?.let { pending ->
             pending.result.complete(uri?.let { pending.prompt.confirm(context.applicationContext, it) } ?: pending.prompt.dismiss())
