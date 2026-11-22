@@ -1,16 +1,17 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "com.soulbrowser.app"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.soulbrowser.app"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 3
         versionName = "0.3.0-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -30,6 +31,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     packaging { jniLibs { useLegacyPackaging = true } }
 }
@@ -47,6 +49,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    // GeckoView stable release. GeckoView is Mozilla's embeddable Firefox engine.
-    implementation("org.mozilla.geckoview:geckoview:160.0.20261116130455")
+    // GeckoView stable release compatible with Android API 36.
+    implementation("org.mozilla.geckoview:geckoview:150.0.20260506140522")
 }
