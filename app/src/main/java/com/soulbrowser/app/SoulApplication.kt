@@ -2,7 +2,9 @@ package com.soulbrowser.app
 
 import android.app.Application
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import org.mozilla.geckoview.GeckoRuntime
+import org.mozilla.geckoview.GeckoRuntimeSettings
 
 /**
  * Owns the single GeckoRuntime for the lifetime of this Android process.
@@ -14,8 +16,19 @@ object GeckoRuntimeProvider {
 
     @Synchronized
     fun get(context: Context): GeckoRuntime {
-        return instance ?: GeckoRuntime.create(context.applicationContext).also {
-            instance = it
+        return instance ?: run {
+            val appContext = context.applicationContext
+            val isDebuggable =
+                (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+            val settings = GeckoRuntimeSettings.Builder()
+                .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_DARK)
+                .aboutConfigEnabled(true)
+                .remoteDebuggingEnabled(isDebuggable)
+                .build()
+
+            GeckoRuntime.create(appContext, settings).also {
+                instance = it
+            }
         }
     }
 }
