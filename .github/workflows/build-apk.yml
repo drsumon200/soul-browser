@@ -54,6 +54,9 @@ jobs:
       - name: Run unit tests
         run: gradle --no-daemon testDebugUnitTest testReleaseUnitTest --stacktrace
 
+      - name: Build optimized installable debug APK
+        run: gradle --no-daemon assembleDebug --stacktrace
+
       - name: Build optimized release APK
         run: gradle --no-daemon assembleRelease --stacktrace
 
@@ -63,11 +66,20 @@ jobs:
       - name: Report package sizes
         shell: bash
         run: |
+          ls -lh app/build/outputs/apk/debug/*.apk
           ls -lh app/build/outputs/apk/release/*.apk
           ls -lh app/build/outputs/bundle/release/*.aab
-          sha256sum app/build/outputs/apk/release/*.apk app/build/outputs/bundle/release/*.aab
+          sha256sum app/build/outputs/apk/debug/*.apk app/build/outputs/apk/release/*.apk app/build/outputs/bundle/release/*.aab
 
-      - name: Upload optimized APK
+      - name: Upload optimized installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Soul-Browser-optimized-debug-APK
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload optimized release APK
         uses: actions/upload-artifact@v4
         with:
           name: Soul-Browser-optimized-ARM64-APK
