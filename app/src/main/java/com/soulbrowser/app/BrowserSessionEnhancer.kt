@@ -45,9 +45,9 @@ object BrowserSessionEnhancer {
         session.selectionActionDelegate = BasicSelectionActionDelegate(activity)
         if (desktopModeDefault) BrowserActions.setDesktopMode(session, true)
 
+        var lastTitle: String? = null
         val baseContent = session.contentDelegate
         session.contentDelegate = object : GeckoSession.ContentDelegate {
-            private var lastTitle: String? = null
 
             override fun onTitleChange(s: GeckoSession, title: String?) {
                 lastTitle = title
@@ -125,7 +125,7 @@ object BrowserSessionEnhancer {
             ) {
                 baseNavigation?.onLocationChange(s, url, perms, hasUserGesture)
                 if (!url.isNullOrBlank() && url.startsWith("http", ignoreCase = true)) {
-                    hooks.onHistoryRecord(tabId, url, null)
+                    hooks.onHistoryRecord(tabId, url, lastTitle)
                 }
             }
 
