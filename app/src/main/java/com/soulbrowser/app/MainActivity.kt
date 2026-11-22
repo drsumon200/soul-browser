@@ -629,7 +629,15 @@ private fun SoulApp(
         }
         enhancementHooks.onCloseRequest = { id ->
             tabs.firstOrNull { it.id == id }?.session?.close()
-            tabs = tabs.filterNot { it.id == id }
+            val remainingTabs = tabs.filterNot { it.id == id }
+            tabs = remainingTabs
+            if (activeTabId == id) {
+                val fallback = remainingTabs.lastOrNull { it.workspaceId == activeWorkspace.id }
+                activeTabId = fallback?.id
+                if (fallback != null) {
+                    activeContainer = containers.firstOrNull { it.id == fallback.containerId } ?: activeContainer
+                }
+            }
             browserViewModel.persistCurrentTabs()
         }
         enhancementHooks.onCrashRecover = { id, session ->
