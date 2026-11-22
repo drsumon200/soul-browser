@@ -14,8 +14,8 @@ android {
         applicationId = "com.soulbrowser.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0-alpha"
+        versionCode = 4
+        versionName = "0.4.0-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Honor 200 uses a 64-bit ARM platform. Keep the initial APK focused on that ABI.
         ndk { abiFilters += listOf("arm64-v8a") }
