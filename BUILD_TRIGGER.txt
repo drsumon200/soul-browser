@@ -1,0 +1,2 @@
+This commit triggers the GitHub Actions Android APK build workflow on main.
+Check the Actions tab for the build result and downloadable APK artifact.
