@@ -8,11 +8,11 @@ private val EXTERNAL_SCHEMES = setOf(
 )
 
 private val IPV4_PATTERN = Regex(
-    """^(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)(?::\\d{1,5})?(?:[/?#].*)?$"""
+    """^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?::\d{1,5})?(?:[/?#].*)?$"""
 )
-private val LOCALHOST_PATTERN = Regex("""(?i)^localhost:\\d{1,5}(?:[/?#].*)?$""")
+private val LOCALHOST_PATTERN = Regex("""(?i)^localhost:\d{1,5}(?:[/?#].*)?$""")
 private val DOMAIN_PATTERN = Regex(
-    """(?i)^(?:www\\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?:\\:\\d{1,5})?(?:[/?#].*)?$"""
+    """(?i)^(?:www\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?::\d{1,5})?(?:[/?#].*)?$"""
 )
 
 internal fun normalizeAddress(
