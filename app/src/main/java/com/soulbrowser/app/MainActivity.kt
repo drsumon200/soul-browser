@@ -246,6 +246,9 @@ private fun SoulApp(runtime: GeckoRuntime) {
                 }
             }
             session.open(runtime)
+            val isSelected = tabId == activeTabId
+            session.setActive(isSelected)
+            session.setFocused(isSelected)
         }
     }
 
@@ -323,6 +326,8 @@ private fun SoulApp(runtime: GeckoRuntime) {
         activeTab?.session?.goBack()
     }
     LaunchedEffect(activeTabId, activeWorkspace.id, tabs.size) {
+        canNavigateBack = false
+        canNavigateForward = false
         val selectedId = activeTabId
         if (selectedId != null && tabs.any { it.id == selectedId && it.session == null }) {
             ensureSession(selectedId)
