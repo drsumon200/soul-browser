@@ -5,6 +5,7 @@ import android.app.AlertDialog as NativeAlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.KeyEvent
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -12,12 +13,18 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +50,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,14 +69,15 @@ import java.net.URLDecoder
 import java.util.UUID
 import kotlin.math.abs
 
-private val Ink = Color(0xFF101116)
-private val Panel = Color(0xFF1A1C24)
-private val Panel2 = Color(0xFF242733)
-private val Lavender = Color(0xFFA7B5FF)
-private val Muted = Color(0xFF9BA0B1)
+private val Ink = SoulColors.Ink
+private val Panel = SoulColors.Panel
+private val Panel2 = SoulColors.Panel2
+private val Lavender = SoulColors.Lavender
+private val Muted = SoulColors.Muted
 
 class MainActivity : ComponentActivity() {
     private val incomingUrlState = mutableStateOf<String?>(null)
+    internal var keyCallbacks: BrowserKeyCallbacks? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,9 +87,17 @@ class MainActivity : ComponentActivity() {
             SoulApp(
                 runtime = runtime,
                 incomingUrl = incomingUrlState.value,
-                onIncomingUrlConsumed = { incomingUrlState.value = null }
+                onIncomingUrlConsumed = { incomingUrlState.value = null },
+                onRegisterKeyCallbacks = { keyCallbacks = it }
             )
         }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        keyCallbacks?.let { cb ->
+            if (HardwareKeyDispatcher.handleKeyDown(keyCode, event, cb)) return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -124,7 +141,8 @@ private fun extractDownloadFileName(response: WebResponse): String {
 private fun SoulApp(
     runtime: GeckoRuntime,
     incomingUrl: String? = null,
-    onIncomingUrlConsumed: () -> Unit = {}
+    onIncomingUrlConsumed: () -> Unit = {},
+    onRegisterKeyCallbacks: (BrowserKeyCallbacks?) -> Unit = {}
 ) {
     val context = LocalContext.current
     val activity = context as Activity
@@ -135,6 +153,52 @@ private fun SoulApp(
 
     var pendingFilePrompt by browserViewModel.pendingFilePromptState
     var pendingDownload by browserViewModel.pendingDownloadState
+
+    var containers by browserViewModel.containersState
+    var workspaces by browserViewModel.workspacesState
+    var activeContainer by browserViewModel.activeContainerState
+    var activeWorkspace by browserViewModel.activeWorkspaceState
+    var tabs by browserViewModel.tabsState
+    var bookmarks by browserViewModel.bookmarksState
+    var activeTabId by browserViewModel.activeTabIdState
+
+    var settings by remember { mutableStateOf(BrowserSettingsStore.load(context)) }
+    var history by remember { mutableStateOf(HistoryStore.load(context)) }
+    var speedDials by remember { mutableStateOf(SoulStore.loadSpeedDials(context)) }
+    var downloadRecords by remember { mutableStateOf(DownloadHistoryStore.load(context)) }
+    var readingListItems by remember { mutableStateOf(ReadingListStore.load(context)) }
+
+    var isFullscreen by remember { mutableStateOf(false) }
+    var showFindBar by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var showVisualTabs by remember { mutableStateOf(false) }
+    var showDownloads by remember { mutableStateOf(false) }
+    var showReadingList by remember { mutableStateOf(false) }
+    var showPrivacyShield by remember { mutableStateOf(false) }
+    var showShareCard by remember { mutableStateOf(false) }
+    var showViewSource by remember { mutableStateOf<String?>(null) }
+    var showSpeedDialEditor by remember { mutableStateOf(false) }
+    var editingSpeedDial by remember { mutableStateOf<SpeedDialItem?>(null) }
+
+    var activeArticle by remember { mutableStateOf<ReaderArticle?>(null) }
+    var splitViewState by remember { mutableStateOf(SplitViewState()) }
+    var previousActiveTabId by remember { mutableStateOf<String?>(null) }
+    var activeGeckoView by remember { mutableStateOf<GeckoView?>(null) }
+    var searchSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    var ttsSpeed by remember { mutableFloatStateOf(1.0f) }
+    var isTtsPlaying by remember { mutableStateOf(false) }
+    val ttsEngine = remember { PageTextToSpeech(context) }
+
+    DisposableEffect(Unit) {
+        onDispose { ttsEngine.shutdown() }
+    }
+
+    var contextElement by remember { mutableStateOf<GeckoSession.ContentDelegate.ContextElement?>(null) }
+    var secureByTabId by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+    var pendingPermCallback by remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
 
     val singleFilePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -175,13 +239,34 @@ private fun SoulApp(
         val body = response?.body
         if (destination != null && body != null) {
             val appContext = context.applicationContext
+            val fileName = extractDownloadFileName(response)
+            val mime = response.headers.entries
+                .firstOrNull { it.key.equals("content-type", true) }?.value ?: "*/*"
             coroutineScope.launch(Dispatchers.IO) {
+                var totalBytes = 0L
                 val saved = try {
                     val output = appContext.contentResolver.openOutputStream(destination)
                         ?: error("Unable to open destination stream")
                     output.use { sink ->
-                        body.use { source -> source.copyTo(sink) }
+                        body.use { source ->
+                            val buffer = ByteArray(8192)
+                            var read: Int
+                            while (source.read(buffer).also { read = it } >= 0) {
+                                sink.write(buffer, 0, read)
+                                totalBytes += read
+                            }
+                        }
                     }
+                    DownloadHistoryStore.add(
+                        appContext,
+                        DownloadRecord(
+                            id = UUID.randomUUID().toString(),
+                            fileName = fileName,
+                            contentUri = destination.toString(),
+                            mimeType = mime,
+                            sizeBytes = totalBytes
+                        )
+                    )
                     true
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -191,7 +276,8 @@ private fun SoulApp(
                     runCatching { body.close() }
                 }
                 withContext(Dispatchers.Main) {
-                    val msg = if (saved) "Download saved" else "Download failed"
+                    downloadRecords = DownloadHistoryStore.load(appContext)
+                    val msg = if (saved) "Download saved: $fileName" else "Download failed"
                     Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
                 }
             }
@@ -200,31 +286,52 @@ private fun SoulApp(
         }
     }
 
-    var containers by browserViewModel.containersState
-    var workspaces by browserViewModel.workspacesState
-    var activeContainer by browserViewModel.activeContainerState
-    var activeWorkspace by browserViewModel.activeWorkspaceState
-    var tabs by browserViewModel.tabsState
-    var bookmarks by browserViewModel.bookmarksState
-    var activeTabId by browserViewModel.activeTabIdState
-
-    var settings by remember { mutableStateOf(BrowserSettingsStore.load(context)) }
-    var history by remember { mutableStateOf(HistoryStore.load(context)) }
-    var isFullscreen by remember { mutableStateOf(false) }
-    var showFindBar by remember { mutableStateOf(false) }
-    var showMoreMenu by remember { mutableStateOf(false) }
-    var showHistory by remember { mutableStateOf(false) }
-    var showSettings by remember { mutableStateOf(false) }
-    var contextElement by remember { mutableStateOf<GeckoSession.ContentDelegate.ContextElement?>(null) }
-    var secureByTabId by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
-    var pendingPermCallback by remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
-
     val androidPermLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
         pendingPermCallback?.invoke(results.values.all { it })
         pendingPermCallback = null
     }
+
+    var pendingPrivateAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val privateUnlockLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { res ->
+        if (res.resultCode == Activity.RESULT_OK) {
+            pendingPrivateAction?.invoke()
+        } else {
+            Toast.makeText(context, "Private space authentication cancelled", Toast.LENGTH_SHORT).show()
+        }
+        pendingPrivateAction = null
+    }
+
+    fun requestPrivateAccess(action: () -> Unit) {
+        if (BiometricPrivateLock.isDeviceSecured(context)) {
+            val intent = BiometricPrivateLock.createUnlockIntent(context)
+            if (intent != null) {
+                pendingPrivateAction = action
+                privateUnlockLauncher.launch(intent)
+                return
+            }
+        }
+        action()
+    }
+
+    // Auto-wipe private container sessions when the device screen locks
+    DisposableEffect(context) {
+        val receiver = AutoWipePrivateReceiver.register(context) {
+            val privateIds = containers.filter { it.isPrivate }.map { it.id }.toSet()
+            if (privateIds.isNotEmpty()) {
+                tabs.filter { it.containerId in privateIds }.forEach { runCatching { it.session?.close() } }
+                tabs = tabs.filterNot { it.containerId in privateIds }
+                browserViewModel.persistCurrentTabs()
+            }
+        }
+        onDispose {
+            runCatching { context.unregisterReceiver(receiver) }
+        }
+    }
+
     val permissionDelegate = remember(context, settings.blockAudibleAutoplay) {
         SoulPermissionDelegate(
             context = context,
@@ -239,7 +346,6 @@ private fun SoulApp(
 
     var address by remember { mutableStateOf("") }
     var isAddressFocused by remember { mutableStateOf(false) }
-    var showTabs by remember { mutableStateOf(false) }
     var showSpaces by remember { mutableStateOf(false) }
     var editingWorkspace by remember { mutableStateOf<BrowserWorkspace?>(null) }
     var showContainers by remember { mutableStateOf(false) }
@@ -248,6 +354,29 @@ private fun SoulApp(
     var createDialog by remember { mutableStateOf<String?>(null) }
     var newName by remember { mutableStateOf("") }
     var newContainerPrivate by remember { mutableStateOf(false) }
+
+    val qrScannerLauncher = rememberLauncherForActivityResult(
+        QrCodeScannerContract()
+    ) { scanned ->
+        if (!scanned.isNullOrBlank()) {
+            val target = normalizeAddress(scanned, settings.searchEngine)
+            if (target.isNotBlank()) {
+                address = target
+                focusManager.clearFocus()
+                keyboardController?.hide()
+            }
+        }
+    }
+
+    val voiceSearchLauncher = rememberLauncherForActivityResult(
+        VoiceSearchContract()
+    ) { voiceQuery ->
+        if (!voiceQuery.isNullOrBlank()) {
+            address = voiceQuery
+            focusManager.clearFocus()
+            keyboardController?.hide()
+        }
+    }
 
     val browserPromptDelegate = remember(context) {
         object : GeckoSession.PromptDelegate {
@@ -401,9 +530,14 @@ private fun SoulApp(
                         address = pageUrl.takeUnless { it == "about:blank" } ?: ""
                     }
                 },
-                onPageStop = { tabId, _ ->
+                onPageStop = { tabId, success ->
                     tabs = tabs.map { current ->
                         if (current.id == tabId) current.copy(isLoading = false, progress = 100) else current
+                    }
+                    if (success && tabId == activeTabId) {
+                        activeGeckoView?.let { gv ->
+                            TabThumbnailCache.captureFromView(tabId, gv)
+                        }
                     }
                 },
                 onProgressChange = { tabId, progress ->
@@ -477,6 +611,7 @@ private fun SoulApp(
                     tabs = tabs + newTab
                     browserViewModel.persistCurrentTabs()
                     if (targetWorkspaceId == activeWorkspace.id) {
+                        previousActiveTabId = activeTabId
                         activeTabId = newTabId
                         activeContainer = targetContainer
                     }
@@ -573,6 +708,7 @@ private fun SoulApp(
         )
         tabs = tabs + tab
         browserViewModel.persistCurrentTabs()
+        previousActiveTabId = activeTabId
         activeTabId = tab.id
         address = if (url == "about:blank") "" else url
     }
@@ -580,6 +716,7 @@ private fun SoulApp(
     fun switchWorkspace(space: BrowserWorkspace) {
         activeWorkspace = space
         val targetTab = tabs.lastOrNull { it.workspaceId == space.id }
+        previousActiveTabId = activeTabId
         activeTabId = targetTab?.id
         activeContainer = targetTab?.let { tab ->
             containers.firstOrNull { it.id == tab.containerId }
@@ -611,10 +748,34 @@ private fun SoulApp(
     }
 
     fun submitAddress() {
-        val target = normalizeAddress(address, settings.searchEngine)
+        val trimmed = address.trim()
+        if (trimmed.isBlank()) return
+
+        // 1. Check Bang search
+        val bangTarget = BangRegistry.resolve(trimmed)
+        if (bangTarget != null) {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+            isAddressFocused = false
+            searchSuggestions = emptyList()
+            navigateTo(bangTarget)
+            return
+        }
+
+        // 2. Check Calculator
+        val calc = OmniboxCalculator.evaluate(trimmed)
+        if (calc != null) {
+            address = calc
+            return
+        }
+
+        // 3. Normal URL / Search
+        val target = normalizeAddress(trimmed, settings.searchEngine)
         if (target.isNotBlank()) {
             focusManager.clearFocus()
             keyboardController?.hide()
+            isAddressFocused = false
+            searchSuggestions = emptyList()
             navigateTo(target)
         }
     }
@@ -623,6 +784,50 @@ private fun SoulApp(
         it.id == activeTabId && it.workspaceId == activeWorkspace.id
     }
     val workspaceTabCount = tabs.count { it.workspaceId == activeWorkspace.id }
+    val previousTab = remember(previousActiveTabId, tabs) {
+        tabs.firstOrNull { it.id == previousActiveTabId && it.id != activeTabId }
+    }
+
+    // Hardware Keyboard shortcuts
+    DisposableEffect(Unit) {
+        onRegisterKeyCallbacks(
+            BrowserKeyCallbacks(
+                onNewTab = { createTab() },
+                onCloseTab = {
+                    activeTab?.let { tab ->
+                        tab.session?.close()
+                        tabs = tabs.filterNot { it.id == tab.id }
+                        browserViewModel.persistCurrentTabs()
+                        val fallback = tabs.lastOrNull { it.workspaceId == activeWorkspace.id }
+                        activeTabId = fallback?.id
+                        if (fallback == null) createTab()
+                    }
+                },
+                onReopenClosed = {},
+                onFocusAddressBar = { isAddressFocused = true },
+                onFindInPage = { showFindBar = true },
+                onReload = { activeTab?.session?.reload() },
+                onNextTab = {
+                    val wTabs = tabs.filter { it.workspaceId == activeWorkspace.id }
+                    if (wTabs.size > 1) {
+                        val idx = wTabs.indexOfFirst { it.id == activeTabId }
+                        val next = wTabs[(idx + 1) % wTabs.size]
+                        activeTabId = next.id
+                    }
+                }
+            )
+        )
+        onDispose { onRegisterKeyCallbacks(null) }
+    }
+
+    // Search suggestion fetcher
+    LaunchedEffect(address, isAddressFocused) {
+        if (isAddressFocused && address.length >= 2 && !address.startsWith("!")) {
+            searchSuggestions = SearchSuggestionClient.fetchSuggestions(address)
+        } else {
+            searchSuggestions = emptyList()
+        }
+    }
 
     SideEffect {
         enhancementHooks.onFullScreen = { full ->
@@ -689,15 +894,19 @@ private fun SoulApp(
         }
     }
 
-    BackHandler(enabled = isFullscreen || showFindBar || activeTab?.canGoBack == true) {
+    BackHandler(enabled = activeArticle != null || isFullscreen || showFindBar || activeTab?.canGoBack == true) {
         when {
+            activeArticle != null -> {
+                activeArticle = null
+                ttsEngine.stop()
+                isTtsPlaying = false
+            }
             isFullscreen -> activeTab?.session?.exitFullScreen()
             showFindBar -> showFindBar = false
             else -> activeTab?.session?.goBack()
         }
     }
 
-    // Keep address bar synced when switching tabs, workspaces, or after rotation.
     LaunchedEffect(activeTabId, activeWorkspace.id) {
         val visibleTab = tabs.firstOrNull {
             it.id == activeTabId && it.workspaceId == activeWorkspace.id
@@ -705,7 +914,6 @@ private fun SoulApp(
         if (!isAddressFocused) {
             address = visibleTab?.url?.takeUnless { it == "about:blank" } ?: ""
         }
-        // Lazy restoration: only open GeckoSession when an actual URL tab becomes active.
         if (visibleTab != null && visibleTab.session == null && visibleTab.url != "about:blank") {
             ensureSession(visibleTab.id)
         }
@@ -742,192 +950,456 @@ private fun SoulApp(
                     .background(Ink)
             ) {
                 if (!isFullscreen && !settings.compactMode) {
-                    // Zen-inspired compact top bar and workspace switcher.
+                    // Zen compact top island & Workspace switcher
                     Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
                         Modifier
-                            .size(34.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Lavender),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("S", color = Ink, fontWeight = FontWeight.Black, fontSize = 20.sp)
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Soul Browser", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text(activeWorkspace.name, color = Muted, fontSize = 11.sp)
-                    }
-                    IconButton(onClick = { showSpaces = true }) {
-                        Icon(Icons.Default.Workspaces, "Workspaces", tint = Lavender)
-                    }
-                    IconButton(onClick = { showContainers = true }) {
-                        Icon(Icons.Default.Layers, "Containers", tint = Lavender)
-                    }
-                    IconButton(onClick = { showTabs = true }) {
                         Box(
                             Modifier
-                                .size(24.dp)
-                                .border(1.5.dp, Color.White, RoundedCornerShape(6.dp)),
+                                .size(34.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Lavender),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = if (workspaceTabCount > 99) "99+" else "$workspaceTabCount",
-                                color = Color.White,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("S", color = Ink, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Soul Browser", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                            Text(activeWorkspace.name, color = Muted, fontSize = 11.sp)
+                        }
+                        // Privacy shield button with live counter badge
+                        IconButton(onClick = { showPrivacyShield = true }) {
+                            Box(contentAlignment = Alignment.TopEnd) {
+                                Icon(
+                                    Icons.Default.Shield,
+                                    "Privacy Shield",
+                                    tint = if (settings.trackingProtection) SoulColors.Mint else Muted
+                                )
+                                val blockedCount = AdblockFilterEngine.totalBlocked()
+                                if (blockedCount > 0) {
+                                    Box(
+                                        Modifier
+                                            .size(13.dp)
+                                            .clip(CircleShape)
+                                            .background(SoulColors.Rose),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = if (blockedCount > 99) "9+" else "$blockedCount",
+                                            color = Color.White,
+                                            fontSize = 7.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        IconButton(onClick = { showSpaces = true }) {
+                            Icon(Icons.Default.Workspaces, "Workspaces", tint = Lavender)
+                        }
+                        IconButton(onClick = { showContainers = true }) {
+                            Icon(Icons.Default.Layers, "Containers", tint = Lavender)
+                        }
+                        IconButton(onClick = { showVisualTabs = true }) {
+                            Box(
+                                Modifier
+                                    .size(24.dp)
+                                    .border(1.5.dp, Color.White, RoundedCornerShape(6.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (workspaceTabCount > 99) "99+" else "$workspaceTabCount",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
-                }
-
                 }
 
                 if (!isFullscreen) {
-                // Address bar
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Panel2)
-                        .padding(horizontal = 12.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (activeTab?.let { isHttpsUrl(it.url) } == true) {
-                        Icon(
-                            Icons.Default.Lock,
-                            contentDescription = "HTTPS connection",
-                            tint = if (secureByTabId[activeTab.id] == true) Color(0xFF8BD5CA) else Muted,
-                            modifier = Modifier.size(16.dp)
+                    // Floating Omnibox with security indicator and smart quick actions
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(Panel2)
+                            .padding(horizontal = 10.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (activeTab?.let { isHttpsUrl(it.url) } == true) {
+                            Icon(
+                                Icons.Default.Lock,
+                                contentDescription = "HTTPS connection",
+                                tint = if (secureByTabId[activeTab.id] == true) SoulColors.Mint else Muted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        } else {
+                            Box(
+                                Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(activeContainer.color))
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        BasicTextField(
+                            value = address,
+                            onValueChange = { address = it },
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(vertical = 11.dp)
+                                .onFocusChanged { isAddressFocused = it.isFocused },
+                            singleLine = true,
+                            cursorBrush = SolidColor(Lavender),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { submitAddress() }),
+                            textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                            decorationBox = { inner ->
+                                if (address.isEmpty()) {
+                                    Text("Search or enter address", color = Muted, fontSize = 14.sp)
+                                }
+                                inner()
+                            }
+                        )
+
+                        val privatePage = activeTab?.let { tab ->
+                            containers.firstOrNull { it.id == tab.containerId }?.isPrivate == true
+                        } == true
+                        val isBookmarked = activeTab != null && bookmarks.any { it.url == activeTab.url }
+
+                        if (isAddressFocused && address.isNotEmpty()) {
+                            IconButton(onClick = { address = "" }) {
+                                Icon(Icons.Default.Clear, "Clear", tint = Muted, modifier = Modifier.size(16.dp))
+                            }
+                        } else {
+                            IconButton(onClick = { qrScannerLauncher.launch(Unit) }) {
+                                Icon(Icons.Default.QrCodeScanner, "Scan QR code", tint = Muted, modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(onClick = { voiceSearchLauncher.launch(Unit) }) {
+                                Icon(Icons.Default.Mic, "Voice search", tint = Muted, modifier = Modifier.size(18.dp))
+                            }
+                        }
+
+                        IconButton(
+                            enabled = activeTab != null && !privatePage && isHttpUrl(activeTab.url),
+                            onClick = {
+                                val current = activeTab
+                                if (current != null && !privatePage && isHttpUrl(current.url)) {
+                                    val existing = bookmarks.any { it.url == current.url }
+                                    bookmarks = if (existing) {
+                                        bookmarks.filterNot { it.url == current.url }
+                                    } else {
+                                        bookmarks + BrowserBookmark(
+                                            url = current.url,
+                                            title = current.title.ifBlank { current.url }
+                                        )
+                                    }
+                                    SoulStore.saveBookmarks(context, bookmarks)
+                                    HapticFeedbackEngine.tick(activeGeckoView)
+                                }
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = "Bookmark",
+                                tint = when {
+                                    privatePage -> Muted.copy(alpha = 0.35f)
+                                    isBookmarked -> Lavender
+                                    else -> Muted
+                                },
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        IconButton(onClick = { submitAddress() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, "Go", tint = Lavender, modifier = Modifier.size(18.dp))
+                        }
+                    }
+
+                    // Omnibox Smart Helpers (Inline Calculator, Bang Hints, Suggestions)
+                    val calcResult = remember(address) {
+                        if (isAddressFocused && address.isNotBlank()) OmniboxCalculator.evaluate(address) else null
+                    }
+                    if (calcResult != null) {
+                        Surface(
+                            onClick = {
+                                address = calcResult
+                                submitAddress()
+                            },
+                            color = Panel2,
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, SoulColors.Mint.copy(alpha = 0.7f)),
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .fillMaxWidth()
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Calculate, null, tint = SoulColors.Mint, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("= $calcResult", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.width(6.dp))
+                                Text("· Tap to calculate", color = Muted, fontSize = 11.sp)
+                            }
+                        }
+                    } else if (isAddressFocused && address.startsWith("!")) {
+                        Surface(
+                            color = Panel2,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .fillMaxWidth()
+                        ) {
+                            Text(
+                                "Bang engines: !g (Google) · !yt (YouTube) · !gh (GitHub) · !w (Wiki) · !ddg · !so · !r",
+                                color = Lavender,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    } else if (isAddressFocused && searchSuggestions.isNotEmpty()) {
+                        LazyColumn(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 2.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Panel2)
+                                .padding(vertical = 4.dp)
+                        ) {
+                            items(searchSuggestions) { suggestion ->
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            address = suggestion
+                                            submitAddress()
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Search, null, tint = Muted, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(suggestion, color = Color.White, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    // Slim loading progress bar
+                    if (activeTab?.isLoading == true && activeTab.url != "about:blank") {
+                        LinearProgressIndicator(
+                            progress = { activeTab.progress.coerceIn(0, 100) / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 3.dp)
+                                .height(2.dp)
+                                .clip(RoundedCornerShape(1.dp)),
+                            color = Lavender,
+                            trackColor = Panel2
                         )
                     } else {
-                        Box(
-                            Modifier.size(8.dp).clip(CircleShape)
-                                .background(Color(activeContainer.color))
-                        )
+                        Spacer(Modifier.height(6.dp))
                     }
-                    Spacer(Modifier.width(8.dp))
-                    BasicTextField(
-                        value = address,
-                        onValueChange = { address = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(vertical = 12.dp)
-                            .onFocusChanged { isAddressFocused = it.isFocused },
-                        singleLine = true,
-                        cursorBrush = SolidColor(Lavender),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { submitAddress() }),
-                        textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
-                        decorationBox = { inner ->
-                            if (address.isEmpty()) {
-                                Text("Search or enter address", color = Muted, fontSize = 14.sp)
-                            }
-                            inner()
-                        }
-                    )
-                    val privatePage = activeTab?.let { tab ->
-                        containers.firstOrNull { it.id == tab.containerId }?.isPrivate == true
-                    } == true
-                    val isBookmarked = activeTab != null && bookmarks.any { it.url == activeTab.url }
-                    IconButton(
-                        enabled = activeTab != null && !privatePage && isHttpUrl(activeTab.url),
-                        onClick = {
-                            val current = activeTab
-                            if (current != null && !privatePage && isHttpUrl(current.url)) {
-                                val existing = bookmarks.any { it.url == current.url }
-                                bookmarks = if (existing) {
-                                    bookmarks.filterNot { it.url == current.url }
-                                } else {
-                                    bookmarks + BrowserBookmark(
-                                        url = current.url,
-                                        title = current.title.ifBlank { current.url }
-                                    )
-                                }
-                                SoulStore.saveBookmarks(context, bookmarks)
-                            }
+                }
+
+                // Main Content Viewport with Reachability & Edge Gestures
+                OneHandedReachContainer(enabled = settings.reachabilityEnabled) {
+                    EdgeSwipeNavigationOverlay(
+                        canGoBack = settings.edgeGesturesEnabled && activeTab?.canGoBack == true,
+                        canGoForward = settings.edgeGesturesEnabled && activeTab?.canGoForward == true,
+                        onGoBack = {
+                            activeTab?.session?.goBack()
+                            HapticFeedbackEngine.tick(activeGeckoView)
+                        },
+                        onGoForward = {
+                            activeTab?.session?.goForward()
+                            HapticFeedbackEngine.tick(activeGeckoView)
                         }
                     ) {
-                        Icon(
-                            Icons.Default.Star,
-                            contentDescription = if (privatePage) {
-                                "Bookmarks unavailable in private container"
+                        Box(Modifier.fillMaxSize()) {
+                            val activeSession = activeTab?.session
+
+                            if (activeArticle != null) {
+                                ReaderModeOverlay(
+                                    article = activeArticle!!,
+                                    onReadAloud = { fullText ->
+                                        ttsEngine.speak(fullText, ttsSpeed)
+                                        isTtsPlaying = true
+                                    },
+                                    onClose = {
+                                        activeArticle = null
+                                        ttsEngine.stop()
+                                        isTtsPlaying = false
+                                    }
+                                )
+                            } else if (activeTab == null || activeSession == null || activeTab.url == "about:blank") {
+                                HomePanel(
+                                    modifier = Modifier.fillMaxSize(),
+                                    activeContainer = activeContainer,
+                                    speedDials = speedDials,
+                                    trackersBlocked = AdblockFilterEngine.totalBlocked(),
+                                    unreadArticles = readingListItems.count { !it.isRead },
+                                    onOpen = { rawUrl ->
+                                        val target = normalizeAddress(rawUrl, settings.searchEngine)
+                                        if (target.isNotBlank()) navigateTo(target)
+                                    },
+                                    onNewTab = { createTab() },
+                                    onOpenSpeedDial = { item -> navigateTo(item.url) },
+                                    onEditSpeedDial = { item ->
+                                        editingSpeedDial = item
+                                        showSpeedDialEditor = true
+                                    },
+                                    onAddSpeedDial = {
+                                        editingSpeedDial = null
+                                        showSpeedDialEditor = true
+                                    },
+                                    onOpenPrivacyShield = { showPrivacyShield = true },
+                                    onOpenReadingList = { showReadingList = true }
+                                )
+                            } else if (splitViewState.isEnabled && splitViewState.secondaryTabId != null) {
+                                val secondaryTab = tabs.firstOrNull { it.id == splitViewState.secondaryTabId }
+                                val secSession = secondaryTab?.let { ensureSession(it.id) }
+                                if (secSession != null) {
+                                    SplitViewHost(
+                                        primarySession = activeSession,
+                                        secondarySession = secSession,
+                                        splitRatio = splitViewState.splitRatio,
+                                        focusedPane = splitViewState.focusedPane,
+                                        onFocusPane = { pane ->
+                                            splitViewState = splitViewState.copy(focusedPane = pane)
+                                        },
+                                        onDragRatioDelta = { delta ->
+                                            splitViewState = SplitViewReducer.adjustRatio(splitViewState, delta)
+                                        },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
                             } else {
-                                "Bookmark current page"
-                            },
-                            tint = when {
-                                privatePage -> Muted.copy(alpha = 0.35f)
-                                isBookmarked -> Lavender
-                                else -> Muted
-                            }
-                        )
-                    }
-                    IconButton(onClick = { showBookmarks = true }) {
-                        Icon(Icons.Default.Bookmarks, "Bookmarks", tint = Color.White)
-                    }
-                    IconButton(onClick = { submitAddress() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, "Go", tint = Lavender)
-                    }
-                }
+                                Box(Modifier.fillMaxSize()) {
+                                    AndroidView(
+                                        modifier = Modifier.fillMaxSize(),
+                                        factory = { viewContext ->
+                                            GeckoView(viewContext).apply {
+                                                activeGeckoView = this
+                                                coverUntilFirstPaint(0xFF101116.toInt())
+                                                setSession(activeSession)
+                                            }
+                                        },
+                                        update = { geckoView ->
+                                            activeGeckoView = geckoView
+                                            if (geckoView.session !== activeSession) {
+                                                geckoView.releaseSession()
+                                                geckoView.coverUntilFirstPaint(0xFF101116.toInt())
+                                                geckoView.setSession(activeSession)
+                                            }
+                                        },
+                                        onRelease = { geckoView ->
+                                            geckoView.releaseSession()
+                                        }
+                                    )
 
-                // Slim loading progress bar
-                if (activeTab?.isLoading == true && activeTab.url != "about:blank") {
-                    LinearProgressIndicator(
-                        progress = { activeTab.progress.coerceIn(0, 100) / 100f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 4.dp)
-                            .height(2.dp)
-                            .clip(RoundedCornerShape(1.dp)),
-                        color = Lavender,
-                        trackColor = Panel2
-                    )
-                } else {
-                    Spacer(Modifier.height(10.dp))
-                }
-
-                }
-
-                // Main content area (HomePanel or single reused GeckoView)
-                val activeSession = activeTab?.session
-                if (activeTab == null || activeSession == null || activeTab.url == "about:blank") {
-                    HomePanel(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        activeContainer = activeContainer,
-                        onOpen = { rawUrl ->
-                            val target = normalizeAddress(rawUrl, settings.searchEngine)
-                            if (target.isNotBlank()) navigateTo(target)
-                        },
-                        onNewTab = { createTab() }
-                    )
-                } else {
-                    AndroidView(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        factory = { viewContext ->
-                            GeckoView(viewContext).apply {
-                                setSession(activeSession)
+                                    if (isFullscreen) {
+                                        VideoGestureOverlay(enabled = true)
+                                    }
+                                }
                             }
-                        },
-                        update = { geckoView ->
-                            if (geckoView.session !== activeSession) {
-                                geckoView.releaseSession()
-                                geckoView.setSession(activeSession)
+
+                            // Floating Quick Action Dock
+                            if (!isFullscreen && activeTab != null && activeSession != null && activeTab.url != "about:blank" && !splitViewState.isEnabled && activeArticle == null) {
+                                Box(
+                                    Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(end = 16.dp, bottom = 10.dp)
+                                ) {
+                                    FloatingQuickActionBar(
+                                        onReaderMode = {
+                                            coroutineScope.launch {
+                                                val article = ReaderModeExtractor.fetchAndExtract(activeTab.url)
+                                                if (article != null) {
+                                                    activeArticle = article
+                                                } else {
+                                                    Toast.makeText(context, "Reader view not available for this page", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        },
+                                        onTranslate = {
+                                            navigateTo(PageTranslateHelper.buildTranslatedUrl(activeTab.url))
+                                        },
+                                        onScreenshot = {
+                                            FullPageScreenshotter.captureAndSave(context, activeGeckoView)
+                                        },
+                                        onNewTab = {
+                                            createTab()
+                                        }
+                                    )
+                                }
                             }
-                        },
-                        onRelease = { geckoView ->
-                            geckoView.releaseSession()
+
+                            // Quick Tab Switcher Pill
+                            if (!isFullscreen && previousTab != null && !isAddressFocused && !splitViewState.isEnabled) {
+                                Box(
+                                    Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(start = 16.dp, bottom = 10.dp)
+                                ) {
+                                    QuickTabSwitcherPill(
+                                        previousTab = previousTab,
+                                        onSwitch = { prev ->
+                                            val prevContainer = containers.firstOrNull { it.id == prev.containerId } ?: activeContainer
+                                            if (prevContainer.isPrivate && activeContainer.id != prevContainer.id) {
+                                                requestPrivateAccess {
+                                                    previousActiveTabId = activeTabId
+                                                    activeTabId = prev.id
+                                                    activeContainer = prevContainer
+                                                }
+                                            } else {
+                                                previousActiveTabId = activeTabId
+                                                activeTabId = prev.id
+                                                activeContainer = prevContainer
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+
+                            // Floating TTS Player
+                            if (isTtsPlaying) {
+                                Box(
+                                    Modifier
+                                        .align(Alignment.TopCenter)
+                                        .padding(top = 10.dp)
+                                ) {
+                                    FloatingTtsPlayer(
+                                        speed = ttsSpeed,
+                                        onCycleSpeed = {
+                                            ttsSpeed = when (ttsSpeed) {
+                                                1.0f -> 1.25f
+                                                1.25f -> 1.5f
+                                                1.5f -> 2.0f
+                                                else -> 1.0f
+                                            }
+                                            activeArticle?.let {
+                                                ttsEngine.speak(it.paragraphs.joinToString("\n\n"), ttsSpeed)
+                                            }
+                                        },
+                                        onStop = {
+                                            ttsEngine.stop()
+                                            isTtsPlaying = false
+                                        }
+                                    )
+                                }
+                            }
                         }
-                    )
+                    }
                 }
 
                 if (showFindBar) {
@@ -938,118 +1410,358 @@ private fun SoulApp(
                 }
 
                 if (!isFullscreen) {
-                // Floating bottom navigation, compact and thumb-friendly.
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp, vertical = 10.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(Panel)
-                        .pointerInput(workspaces, activeWorkspace.id) {
-                            var dragX = 0f
-                            var dragY = 0f
-                            detectDragGestures(
-                                onDragEnd = {
-                                    if (abs(dragX) > 48f && abs(dragX) > abs(dragY)) {
-                                        val currentIndex = workspaces.indexOfFirst {
-                                            it.id == activeWorkspace.id
+                    // Floating Zen Bottom Bar with Horizontal Swipe for Workspace Switch
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp, vertical = 8.dp)
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(Panel)
+                            .pointerInput(workspaces, activeWorkspace.id) {
+                                var dragX = 0f
+                                var dragY = 0f
+                                detectDragGestures(
+                                    onDragEnd = {
+                                        if (abs(dragX) > 48f && abs(dragX) > abs(dragY)) {
+                                            val currentIndex = workspaces.indexOfFirst {
+                                                it.id == activeWorkspace.id
+                                            }
+                                            val nextIndex = currentIndex + if (dragX < 0) 1 else -1
+                                            if (nextIndex in workspaces.indices) {
+                                                switchWorkspace(workspaces[nextIndex])
+                                                HapticFeedbackEngine.confirm(activeGeckoView)
+                                            }
+                                        } else if (dragY < -48f) {
+                                            showVisualTabs = true
+                                            HapticFeedbackEngine.tick(activeGeckoView)
                                         }
-                                        val nextIndex = currentIndex + if (dragX < 0) 1 else -1
-                                        if (nextIndex in workspaces.indices) {
-                                            switchWorkspace(workspaces[nextIndex])
-                                        }
-                                    } else if (dragY < -48f) {
-                                        showTabs = true
+                                        dragX = 0f
+                                        dragY = 0f
+                                    },
+                                    onDragCancel = {
+                                        dragX = 0f
+                                        dragY = 0f
+                                    },
+                                    onDrag = { change, amount ->
+                                        dragX += amount.x
+                                        dragY += amount.y
+                                        change.consume()
                                     }
-                                    dragX = 0f
-                                    dragY = 0f
-                                },
-                                onDragCancel = {
-                                    dragX = 0f
-                                    dragY = 0f
-                                },
-                                onDrag = { change, amount ->
-                                    dragX += amount.x
-                                    dragY += amount.y
-                                    change.consume()
-                                }
+                                )
+                            }
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        val canBack = activeTab?.canGoBack == true
+                        val canForward = activeTab?.canGoForward == true
+                        IconButton(
+                            onClick = {
+                                activeTab?.session?.goBack()
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            enabled = canBack
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                "Back",
+                                tint = if (canBack) Color.White else Muted.copy(alpha = 0.35f)
                             )
                         }
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    val canBack = activeTab?.canGoBack == true
-                    val canForward = activeTab?.canGoForward == true
-                    IconButton(
-                        onClick = { activeTab?.session?.goBack() },
-                        enabled = canBack
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            "Back",
-                            tint = if (canBack) Color.White else Muted.copy(alpha = 0.35f)
-                        )
+                        IconButton(
+                            onClick = {
+                                activeTab?.session?.goForward()
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            enabled = canForward
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                "Forward",
+                                tint = if (canForward) Color.White else Muted.copy(alpha = 0.35f)
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                if (activeTab?.isLoading == true) {
+                                    activeTab.session?.stop()
+                                } else {
+                                    activeTab?.session?.reload()
+                                }
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            enabled = activeTab?.session != null
+                        ) {
+                            Icon(
+                                if (activeTab?.isLoading == true) Icons.Default.Close else Icons.Default.Refresh,
+                                if (activeTab?.isLoading == true) "Stop" else "Reload",
+                                tint = if (activeTab?.session != null) Color.White else Muted.copy(alpha = 0.35f)
+                            )
+                        }
+                        IconButton(onClick = {
+                            createTab()
+                            HapticFeedbackEngine.tick(activeGeckoView)
+                        }) {
+                            Icon(Icons.Default.Add, "New tab", tint = Lavender)
+                        }
+                        IconButton(onClick = { showMoreMenu = true }) {
+                            Icon(Icons.Default.MoreVert, "More options", tint = Color.White)
+                        }
+                        IconButton(onClick = {
+                            showVisualTabs = true
+                            HapticFeedbackEngine.tick(activeGeckoView)
+                        }) {
+                            Icon(Icons.Default.GridView, "Tab overview", tint = Color.White)
+                        }
                     }
-                    IconButton(
-                        onClick = { activeTab?.session?.goForward() },
-                        enabled = canForward
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowForward,
-                            "Forward",
-                            tint = if (canForward) Color.White else Muted.copy(alpha = 0.35f)
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            if (activeTab?.isLoading == true) {
-                                activeTab.session?.stop()
-                            } else {
-                                activeTab?.session?.reload()
-                            }
-                        },
-                        enabled = activeTab?.session != null
-                    ) {
-                        Icon(
-                            if (activeTab?.isLoading == true) Icons.Default.Close else Icons.Default.Refresh,
-                            if (activeTab?.isLoading == true) "Stop" else "Reload",
-                            tint = if (activeTab?.session != null) Color.White else Muted.copy(alpha = 0.35f)
-                        )
-                    }
-                    IconButton(onClick = { createTab() }) {
-                        Icon(Icons.Default.Add, "New tab", tint = Lavender)
-                    }
-                    IconButton(onClick = { showMoreMenu = true }) {
-                        Icon(Icons.Default.MoreVert, "More browser options", tint = Color.White)
-                    }
-                    IconButton(onClick = { showTabs = true }) {
-                        Icon(Icons.Default.GridView, "Tab overview", tint = Color.White)
-                    }
-                }
                 }
             }
         }
 
+        // Visual Tabs Sheet (with live thumbnails & container indicators)
+        if (showVisualTabs) {
+            val currentWorkspaceTabs = tabs.filter { it.workspaceId == activeWorkspace.id }
+            VisualTabGridSheet(
+                tabs = currentWorkspaceTabs,
+                containers = containers,
+                activeTabId = activeTabId,
+                onSelectTab = { selected ->
+                    val targetContainer = containers.firstOrNull { it.id == selected.containerId } ?: activeContainer
+                    if (targetContainer.isPrivate && activeContainer.id != targetContainer.id) {
+                        requestPrivateAccess {
+                            previousActiveTabId = activeTabId
+                            activeTabId = selected.id
+                            activeContainer = targetContainer
+                        }
+                    } else {
+                        previousActiveTabId = activeTabId
+                        activeTabId = selected.id
+                        activeContainer = targetContainer
+                    }
+                },
+                onCloseTab = { tabToClose ->
+                    runCatching { tabToClose.session?.close() }
+                    TabThumbnailCache.remove(tabToClose.id)
+                    val remaining = tabs.filterNot { it.id == tabToClose.id }
+                    tabs = remaining
+                    browserViewModel.persistCurrentTabs()
+                    if (activeTabId == tabToClose.id) {
+                        val fallback = remaining.lastOrNull { it.workspaceId == activeWorkspace.id }
+                        activeTabId = fallback?.id
+                        if (fallback != null) {
+                            activeContainer = containers.firstOrNull { it.id == fallback.containerId } ?: activeContainer
+                        } else {
+                            createTab()
+                        }
+                    }
+                },
+                onDismiss = { showVisualTabs = false }
+            )
+        }
+
+        // Privacy Shield & Tracker Dashboard
+        if (showPrivacyShield) {
+            PrivacyDashboardSheet(
+                trackersBlocked = AdblockFilterEngine.totalBlocked(),
+                httpsUpgrades = secureByTabId.count { it.value },
+                paramsStripped = AdblockFilterEngine.totalBlocked() * 2,
+                onNukeAllData = {
+                    tabs.forEach { runCatching { it.session?.close() } }
+                    tabs = emptyList()
+                    runtime.storageController.clearData(org.mozilla.geckoview.StorageController.ClearFlags.ALL)
+                    createTab()
+                    Toast.makeText(context, "All cookies, cache & web data cleared", Toast.LENGTH_SHORT).show()
+                },
+                onDismiss = { showPrivacyShield = false }
+            )
+        }
+
+        // Downloads Manager
+        if (showDownloads) {
+            DownloadsManagerSheet(
+                records = downloadRecords,
+                onDeleteRecord = { id ->
+                    downloadRecords = DownloadHistoryStore.remove(context, id)
+                },
+                onDismiss = { showDownloads = false }
+            )
+        }
+
+        // Reading List
+        if (showReadingList) {
+            ReadingListSheet(
+                items = readingListItems,
+                onOpen = { item ->
+                    navigateTo(item.url)
+                    showReadingList = false
+                },
+                onToggleRead = { item ->
+                    readingListItems = ReadingListStore.markRead(context, item.url, !item.isRead)
+                },
+                onDelete = { item ->
+                    readingListItems = ReadingListStore.remove(context, item.url)
+                },
+                onDismiss = { showReadingList = false }
+            )
+        }
+
+        // Share Visual QR Card
+        if (showShareCard && activeTab != null) {
+            ShareVisualCardDialog(
+                title = activeTab.title.ifBlank { activeTab.url },
+                url = activeTab.url,
+                onCopy = {
+                    BrowserActions.copyToClipboard(context, activeTab.url)
+                    Toast.makeText(context, "URL copied", Toast.LENGTH_SHORT).show()
+                },
+                onShare = {
+                    BrowserActions.shareUrl(context, activeTab.url, activeTab.title)
+                },
+                onDismiss = { showShareCard = false }
+            )
+        }
+
+        // View Source Dialog
+        showViewSource?.let { src ->
+            ViewSourceDialog(
+                url = activeTab?.url.orEmpty(),
+                htmlSource = src,
+                onCopy = {
+                    BrowserActions.copyToClipboard(context, src)
+                    Toast.makeText(context, "Source code copied", Toast.LENGTH_SHORT).show()
+                },
+                onDismiss = { showViewSource = null }
+            )
+        }
+
+        // Speed Dial Editor
+        if (showSpeedDialEditor) {
+            SpeedDialEditorDialog(
+                initial = editingSpeedDial,
+                onSave = { saved ->
+                    speedDials = if (editingSpeedDial == null) {
+                        speedDials + saved
+                    } else {
+                        speedDials.map { if (it.url == editingSpeedDial?.url) saved else it }
+                    }
+                    SoulStore.saveSpeedDials(context, speedDials)
+                    showSpeedDialEditor = false
+                    editingSpeedDial = null
+                },
+                onDelete = if (editingSpeedDial != null) {
+                    {
+                        speedDials = speedDials.filterNot { it.url == editingSpeedDial?.url }
+                        SoulStore.saveSpeedDials(context, speedDials)
+                        showSpeedDialEditor = false
+                        editingSpeedDial = null
+                    }
+                } else null,
+                onDismiss = {
+                    showSpeedDialEditor = false
+                    editingSpeedDial = null
+                }
+            )
+        }
+
+        // Browser More Options Menu
         if (showMoreMenu) {
             BrowserMoreMenuDialog(
                 isDesktopMode = BrowserActions.isDesktopMode(activeTab?.session),
                 isCompactMode = settings.compactMode,
                 hasActivePage = activeTab != null && activeTab.url != "about:blank",
-                onToggleDesktopMode = { BrowserActions.setDesktopMode(activeTab?.session, !BrowserActions.isDesktopMode(activeTab?.session)) },
+                onToggleDesktopMode = {
+                    BrowserActions.setDesktopMode(activeTab?.session, !BrowserActions.isDesktopMode(activeTab?.session))
+                },
                 onToggleCompactMode = {
                     settings = settings.copy(compactMode = !settings.compactMode)
                     BrowserSettingsStore.save(context, settings)
                 },
                 onFindInPage = { showFindBar = true },
                 onShare = { activeTab?.let { BrowserActions.shareUrl(context, it.url, it.title) } },
-                onCopyUrl = { activeTab?.let { BrowserActions.copyToClipboard(context, it.url) } },
-                onOpenHistory = { history = HistoryStore.load(context); showHistory = true },
+                onCopyUrl = {
+                    activeTab?.let {
+                        val isPrivate = containers.firstOrNull { c -> c.id == it.containerId }?.isPrivate == true
+                        if (isPrivate) {
+                            ClipboardAutoClear.copySensitive(context, coroutineScope, it.url)
+                            Toast.makeText(context, "Copied (auto-clears in 60s)", Toast.LENGTH_SHORT).show()
+                        } else {
+                            BrowserActions.copyToClipboard(context, it.url)
+                            Toast.makeText(context, "Link copied", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                onOpenHistory = {
+                    history = HistoryStore.load(context)
+                    showHistory = true
+                },
                 onOpenSettings = { showSettings = true },
+                onOpenDownloads = { showDownloads = true },
+                onOpenReadingList = { showReadingList = true },
+                onOpenPrivacyShield = { showPrivacyShield = true },
+                onOpenShareCard = { showShareCard = true },
+                onViewSource = {
+                    activeTab?.let { tab ->
+                        coroutineScope.launch(Dispatchers.IO) {
+                            val src = runCatching {
+                                val conn = (java.net.URL(tab.url).openConnection() as java.net.HttpURLConnection).apply {
+                                    connectTimeout = 4000
+                                    readTimeout = 4000
+                                }
+                                try {
+                                    conn.inputStream.bufferedReader().use { it.readText().take(50_000) }
+                                } finally {
+                                    conn.disconnect()
+                                }
+                            }.getOrDefault("<!-- Unable to fetch HTML source directly -->")
+                            withContext(Dispatchers.Main) {
+                                showViewSource = src
+                            }
+                        }
+                    }
+                },
+                onSaveOffline = {
+                    activeTab?.let { tab ->
+                        coroutineScope.launch {
+                            val file = WebArchiveSaver.saveOfflineSnapshot(context, tab.url, tab.title)
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(
+                                    context,
+                                    if (file != null) "Page archived: ${file.name}" else "Archival failed",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    }
+                },
+                onReaderMode = {
+                    activeTab?.let { tab ->
+                        coroutineScope.launch {
+                            val article = ReaderModeExtractor.fetchAndExtract(tab.url)
+                            withContext(Dispatchers.Main) {
+                                if (article != null) {
+                                    activeArticle = article
+                                } else {
+                                    Toast.makeText(context, "Reader view unavailable", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                },
+                onSplitScreen = {
+                    val otherTabs = tabs.filter { it.id != activeTabId }
+                    if (otherTabs.isNotEmpty()) {
+                        val secondary = otherTabs.first()
+                        splitViewState = SplitViewReducer.openSplit(secondary.id)
+                        Toast.makeText(context, "Split view active", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Open at least two tabs to split", Toast.LENGTH_SHORT).show()
+                    }
+                },
                 onDismiss = { showMoreMenu = false }
             )
         }
 
+        // History Dialog
         if (showHistory) {
             BrowserHistoryDialog(
                 entries = history,
@@ -1060,6 +1772,7 @@ private fun SoulApp(
             )
         }
 
+        // Settings Dialog
         if (showSettings) {
             BrowserSettingsDialog(
                 settings = settings,
@@ -1074,6 +1787,7 @@ private fun SoulApp(
             )
         }
 
+        // Context Menu Dialog
         contextElement?.let { element ->
             BrowserContextMenuDialog(
                 element = element,
@@ -1084,93 +1798,25 @@ private fun SoulApp(
                             containers = containers + it
                             SoulStore.saveContainers(context, containers)
                         }
-                    createTab(url = url, containerOverride = privateContainer)
+                    requestPrivateAccess {
+                        createTab(url = url, containerOverride = privateContainer)
+                    }
                 },
-                onCopyUrl = { BrowserActions.copyToClipboard(context, it) },
+                onCopyUrl = {
+                    BrowserActions.copyToClipboard(context, it)
+                    Toast.makeText(context, "Link copied", Toast.LENGTH_SHORT).show()
+                },
                 onShareUrl = { BrowserActions.shareUrl(context, it) },
                 onDismiss = { contextElement = null }
             )
         }
 
-        if (showTabs) {
-            val workspaceTabs = tabs.filter { it.workspaceId == activeWorkspace.id }
-            AlertDialog(
-                onDismissRequest = { showTabs = false },
-                containerColor = Panel,
-                title = { Text("Tabs · ${activeWorkspace.name}") },
-                text = {
-                    Column {
-                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                            items(workspaceTabs, key = { it.id }) { tab ->
-                                val isCurrent = tab.id == activeTabId
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isCurrent) Panel2 else Color.Transparent)
-                                        .clickable {
-                                            activeTabId = tab.id
-                                            activeContainer = containers.firstOrNull {
-                                                it.id == tab.containerId
-                                            } ?: activeContainer
-                                            showTabs = false
-                                        }
-                                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Default.Language,
-                                        null,
-                                        tint = if (isCurrent) Lavender else Muted
-                                    )
-                                    Spacer(Modifier.width(10.dp))
-                                    Text(
-                                        tab.title.ifBlank { tab.url.ifBlank { "New Tab" } },
-                                        Modifier.weight(1f),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = if (isCurrent) Lavender else Color.White
-                                    )
-                                    IconButton(
-                                        onClick = {
-                                            runCatching { tab.session?.close() }
-                                            val remaining = tabs.filterNot { it.id == tab.id }
-                                            tabs = remaining
-                                            browserViewModel.persistCurrentTabs()
-                                            if (activeTabId == tab.id) {
-                                                val fallback = remaining.lastOrNull {
-                                                    it.workspaceId == activeWorkspace.id
-                                                }
-                                                activeTabId = fallback?.id
-                                                if (fallback != null) {
-                                                    activeContainer = containers.firstOrNull {
-                                                        it.id == fallback.containerId
-                                                    } ?: activeContainer
-                                                }
-                                            }
-                                        }
-                                    ) {
-                                        Icon(Icons.Default.Close, "Close tab", tint = Muted)
-                                    }
-                                }
-                            }
-                        }
-                        TextButton(onClick = { createTab(); showTabs = false }) {
-                            Text("+ New tab")
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showTabs = false }) { Text("Done") }
-                }
-            )
-        }
-
+        // Workspaces Dialog
         if (showSpaces) {
             AlertDialog(
                 onDismissRequest = { showSpaces = false },
                 containerColor = Panel,
-                title = { Text("Workspaces") },
+                title = { Text("Workspaces", color = Color.White) },
                 text = {
                     Column {
                         LazyColumn(Modifier.heightIn(max = 320.dp)) {
@@ -1191,9 +1837,9 @@ private fun SoulApp(
                                         tint = if (space.id == activeWorkspace.id) Lavender else Muted
                                     )
                                     Spacer(Modifier.width(12.dp))
-                                    Text(space.name, Modifier.weight(1f))
+                                    Text(space.name, Modifier.weight(1f), color = Color.White)
                                     IconButton(onClick = { editingWorkspace = space }) {
-                                        Icon(Icons.Default.Edit, "Edit workspace", tint = Muted)
+                                        Icon(Icons.Default.Edit, "Edit", tint = Muted)
                                     }
                                     if (space.id == activeWorkspace.id) {
                                         Icon(Icons.Default.Check, null, tint = Lavender)
@@ -1208,7 +1854,7 @@ private fun SoulApp(
                                 showSpaces = false
                             }
                         ) {
-                            Text("+ Create workspace")
+                            Text("+ Create workspace", color = Lavender)
                         }
                     }
                 },
@@ -1248,11 +1894,12 @@ private fun SoulApp(
             )
         }
 
+        // Containers Dialog
         if (showContainers) {
             AlertDialog(
                 onDismissRequest = { showContainers = false },
                 containerColor = Panel,
-                title = { Text("Containers") },
+                title = { Text("Containers", color = Color.White) },
                 text = {
                     Column {
                         LazyColumn(Modifier.heightIn(max = 320.dp)) {
@@ -1261,18 +1908,21 @@ private fun SoulApp(
                                     Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            activeContainer = item
-                                            workspaces = workspaces.map { space ->
-                                                if (space.id == activeWorkspace.id) {
-                                                    space.copy(containerId = item.id)
-                                                } else {
-                                                    space
+                                            val action = {
+                                                activeContainer = item
+                                                workspaces = workspaces.map { space ->
+                                                    if (space.id == activeWorkspace.id) {
+                                                        space.copy(containerId = item.id)
+                                                    } else {
+                                                        space
+                                                    }
                                                 }
+                                                activeWorkspace = workspaces.first { it.id == activeWorkspace.id }
+                                                SoulStore.saveWorkspaces(context, workspaces)
+                                                showContainers = false
+                                                createTab(containerOverride = item)
                                             }
-                                            activeWorkspace = workspaces.first { it.id == activeWorkspace.id }
-                                            SoulStore.saveWorkspaces(context, workspaces)
-                                            showContainers = false
-                                            createTab(containerOverride = item)
+                                            if (item.isPrivate) requestPrivateAccess(action) else action()
                                         }
                                         .padding(vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -1286,7 +1936,8 @@ private fun SoulApp(
                                     Spacer(Modifier.width(12.dp))
                                     Text(
                                         text = if (item.isPrivate) "${item.name} (Private)" else item.name,
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(1f),
+                                        color = Color.White
                                     )
                                     if (item.id == activeContainer.id) {
                                         Icon(Icons.Default.Check, null, tint = Lavender)
@@ -1294,7 +1945,7 @@ private fun SoulApp(
                                     IconButton(onClick = { confirmClearContainer = item }) {
                                         Icon(
                                             Icons.Default.DeleteOutline,
-                                            "Clear container data",
+                                            "Clear data",
                                             tint = Muted
                                         )
                                     }
@@ -1309,7 +1960,7 @@ private fun SoulApp(
                                 showContainers = false
                             }
                         ) {
-                            Text("+ New container")
+                            Text("+ New container", color = Lavender)
                         }
                     }
                 },
@@ -1323,10 +1974,11 @@ private fun SoulApp(
             AlertDialog(
                 onDismissRequest = { confirmClearContainer = null },
                 containerColor = Panel,
-                title = { Text("Clear ${targetContainer.name} data?") },
+                title = { Text("Clear ${targetContainer.name} data?", color = Color.White) },
                 text = {
                     Text(
-                        "This closes tabs in this container and deletes its cookies and site storage. You will be signed out of websites in this container."
+                        "This closes tabs in this container and deletes its cookies, session storage, and site cache.",
+                        color = Color.White
                     )
                 },
                 confirmButton = {
@@ -1348,9 +2000,10 @@ private fun SoulApp(
                                 createTab(containerOverride = activeContainer)
                             }
                             confirmClearContainer = null
+                            Toast.makeText(context, "${targetContainer.name} data cleared", Toast.LENGTH_SHORT).show()
                         }
                     ) {
-                        Text("Clear data")
+                        Text("Clear data", color = SoulColors.Rose)
                     }
                 },
                 dismissButton = {
@@ -1359,14 +2012,15 @@ private fun SoulApp(
             )
         }
 
+        // Bookmarks Dialog
         if (showBookmarks) {
             AlertDialog(
                 onDismissRequest = { showBookmarks = false },
                 containerColor = Panel,
-                title = { Text("Bookmarks") },
+                title = { Text("Bookmarks", color = Color.White) },
                 text = {
                     if (bookmarks.isEmpty()) {
-                        Text("No bookmarks yet. Open a page and tap the star.", color = Muted)
+                        Text("No bookmarks yet. Tap the star to bookmark a page.", color = Muted)
                     } else {
                         LazyColumn(Modifier.heightIn(max = 320.dp)) {
                             items(bookmarks, key = { it.url }) { item ->
@@ -1386,7 +2040,8 @@ private fun SoulApp(
                                         Text(
                                             item.title,
                                             maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            overflow = TextOverflow.Ellipsis,
+                                            color = Color.White
                                         )
                                         Text(
                                             item.url,
@@ -1398,14 +2053,37 @@ private fun SoulApp(
                                     }
                                     IconButton(
                                         onClick = {
+                                            val speedDial = SpeedDialItem(item.title, item.url)
+                                            speedDials = (listOf(speedDial) + speedDials.filterNot { it.url == speedDial.url })
+                                            SoulStore.saveSpeedDials(context, speedDials)
+                                            Toast.makeText(context, "Pinned to Home shortcuts", Toast.LENGTH_SHORT).show()
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.PushPin, "Pin to Home", tint = SoulColors.Mint, modifier = Modifier.size(16.dp))
+                                    }
+                                    IconButton(
+                                        onClick = {
                                             bookmarks = bookmarks.filterNot { it.url == item.url }
                                             SoulStore.saveBookmarks(context, bookmarks)
                                         }
                                     ) {
-                                        Icon(Icons.Default.Close, "Remove bookmark", tint = Muted)
+                                        Icon(Icons.Default.Close, "Remove", tint = Muted)
                                     }
                                 }
                             }
+                        }
+                    }
+                },
+                dismissButton = {
+                    if (bookmarks.isNotEmpty()) {
+                        TextButton(
+                            onClick = {
+                                val html = BookmarkHtmlPort.exportNetscapeHtml(bookmarks)
+                                BrowserActions.copyToClipboard(context, html)
+                                Toast.makeText(context, "Bookmarks exported as HTML to clipboard", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Text("Export HTML", color = SoulColors.Mint)
                         }
                     }
                 },
@@ -1415,12 +2093,13 @@ private fun SoulApp(
             )
         }
 
+        // Creation Dialog (Workspace or Container)
         if (createDialog != null) {
             AlertDialog(
                 onDismissRequest = { createDialog = null },
                 containerColor = Panel,
                 title = {
-                    Text(if (createDialog == "workspace") "New workspace" else "New container")
+                    Text(if (createDialog == "workspace") "New workspace" else "New container", color = Color.White)
                 },
                 text = {
                     Column {
@@ -1428,7 +2107,8 @@ private fun SoulApp(
                             value = newName,
                             onValueChange = { newName = it },
                             label = { Text("Name") },
-                            singleLine = true
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
                         if (createDialog == "container") {
                             Row(
@@ -1442,9 +2122,9 @@ private fun SoulApp(
                                     onCheckedChange = { newContainerPrivate = it }
                                 )
                                 Column {
-                                    Text("Private container", fontSize = 14.sp)
+                                    Text("Private container", fontSize = 14.sp, color = Color.White)
                                     Text(
-                                        "Do not restore its tabs or URLs after closing",
+                                        "Excludes tabs and history from persistent storage",
                                         color = Muted,
                                         fontSize = 11.sp
                                     )
@@ -1481,7 +2161,7 @@ private fun SoulApp(
                             createDialog = null
                         }
                     ) {
-                        Text("Create")
+                        Text("Create", color = Lavender)
                     }
                 },
                 dismissButton = {
@@ -1492,46 +2172,179 @@ private fun SoulApp(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HomePanel(
     modifier: Modifier = Modifier,
     activeContainer: BrowserContainer,
+    speedDials: List<SpeedDialItem>,
+    trackersBlocked: Int,
+    unreadArticles: Int,
     onOpen: (String) -> Unit,
-    onNewTab: () -> Unit
+    onNewTab: () -> Unit,
+    onOpenSpeedDial: (SpeedDialItem) -> Unit,
+    onEditSpeedDial: (SpeedDialItem) -> Unit,
+    onAddSpeedDial: () -> Unit,
+    onOpenPrivacyShield: () -> Unit,
+    onOpenReadingList: () -> Unit
 ) {
     Column(
-        modifier = modifier.padding(horizontal = 24.dp),
+        modifier = modifier
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Box(
             Modifier
-                .size(76.dp)
-                .clip(RoundedCornerShape(26.dp))
+                .size(72.dp)
+                .clip(RoundedCornerShape(24.dp))
                 .background(Lavender),
             contentAlignment = Alignment.Center
         ) {
-            Text("S", color = Ink, fontSize = 42.sp, fontWeight = FontWeight.Black)
+            Text("S", color = Ink, fontSize = 40.sp, fontWeight = FontWeight.Black)
         }
-        Spacer(Modifier.height(18.dp))
-        Text("A quieter way to browse.", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(6.dp))
-        Text("Your space. Your tabs. Your focus.", color = Muted, fontSize = 13.sp)
-        Spacer(Modifier.height(26.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QuickLink("Google", "https://www.google.com", onOpen)
-            QuickLink("YouTube", "https://m.youtube.com", onOpen)
-            QuickLink("Wikipedia", "https://wikipedia.org", onOpen)
-        }
-        Spacer(Modifier.height(24.dp))
-        Text("Browsing in ${activeContainer.name}", color = Muted, fontSize = 12.sp)
-        TextButton(onClick = onNewTab) { Text("＋ New tab", color = Lavender) }
-    }
-}
+        Spacer(Modifier.height(14.dp))
+        Text("Soul Browser", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Spacer(Modifier.height(4.dp))
+        Text("A quieter way to browse.", color = Muted, fontSize = 13.sp)
 
-@Composable
-private fun QuickLink(title: String, url: String, onOpen: (String) -> Unit) {
-    Surface(onClick = { onOpen(url) }, color = Panel2, shape = RoundedCornerShape(14.dp)) {
-        Text(title, Modifier.padding(horizontal = 14.dp, vertical = 11.dp), color = Color.White, fontSize = 12.sp)
+        Spacer(Modifier.height(18.dp))
+
+        // Zen Status Chips (Container + Shield + Reading list)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                color = Panel2,
+                shape = RoundedCornerShape(999.dp)
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(Color(activeContainer.color))
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        if (activeContainer.isPrivate) "${activeContainer.name} (Private)" else activeContainer.name,
+                        color = Color.White,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Surface(
+                onClick = onOpenPrivacyShield,
+                color = Panel2,
+                shape = RoundedCornerShape(999.dp)
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Shield, null, tint = SoulColors.Mint, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text("$trackersBlocked blocked", color = SoulColors.Mint, fontSize = 11.sp)
+                }
+            }
+
+            if (unreadArticles > 0) {
+                Surface(
+                    onClick = onOpenReadingList,
+                    color = Panel2,
+                    shape = RoundedCornerShape(999.dp)
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.MenuBook, null, tint = SoulColors.Amber, modifier = Modifier.size(13.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("$unreadArticles read later", color = SoulColors.Amber, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        // Speed Dial shortcuts grid
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(4),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(speedDials, key = { it.url }) { item ->
+                Column(
+                    Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Panel2)
+                        .combinedClickable(
+                            onClick = { onOpenSpeedDial(item) },
+                            onLongClick = { onEditSpeedDial(item) }
+                        )
+                        .padding(vertical = 12.dp, horizontal = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Lavender.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            item.title.take(1).uppercase(),
+                            color = Lavender,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        item.title,
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            item {
+                Column(
+                    Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Panel2.copy(alpha = 0.5f))
+                        .clickable { onAddSpeedDial() }
+                        .padding(vertical = 12.dp, horizontal = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .border(1.dp, Muted.copy(alpha = 0.5f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Add, "Add shortcut", tint = Muted, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text("Add", color = Muted, fontSize = 11.sp)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
+        TextButton(onClick = onNewTab) {
+            Text("＋ Open new tab", color = Lavender, fontSize = 13.sp)
+        }
     }
 }

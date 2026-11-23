@@ -13,14 +13,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DesktopWindows
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.VerticalSplit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.RadioButton
@@ -57,6 +65,14 @@ fun BrowserMoreMenuDialog(
     onCopyUrl: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    onOpenReadingList: () -> Unit,
+    onOpenPrivacyShield: () -> Unit,
+    onOpenShareCard: () -> Unit,
+    onViewSource: () -> Unit,
+    onSaveOffline: () -> Unit,
+    onReaderMode: () -> Unit,
+    onSplitScreen: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -64,14 +80,24 @@ fun BrowserMoreMenuDialog(
         containerColor = DialogPanel,
         title = { Text("Browser menu", color = Color.White) },
         text = {
-            Column(Modifier.fillMaxWidth()) {
-                MenuRow(Icons.Default.DesktopWindows, if (isDesktopMode) "Switch to mobile site" else "Request desktop site", hasActivePage) { onToggleDesktopMode(); onDismiss() }
-                MenuRow(Icons.Default.Fullscreen, if (isCompactMode) "Disable compact mode" else "Enable compact mode", true) { onToggleCompactMode(); onDismiss() }
-                MenuRow(Icons.Default.Search, "Find in page", hasActivePage) { onFindInPage(); onDismiss() }
-                MenuRow(Icons.Default.Share, "Share page", hasActivePage) { onShare(); onDismiss() }
-                MenuRow(Icons.Default.ContentCopy, "Copy link", hasActivePage) { onCopyUrl(); onDismiss() }
-                MenuRow(Icons.Default.History, "History", true) { onOpenHistory(); onDismiss() }
-                MenuRow(Icons.Default.Settings, "Settings", true) { onOpenSettings(); onDismiss() }
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                item {
+                    MenuRow(Icons.Default.Shield, "Privacy shield & stats", true) { onOpenPrivacyShield(); onDismiss() }
+                    MenuRow(Icons.Default.AutoStories, "Reader mode", hasActivePage) { onReaderMode(); onDismiss() }
+                    MenuRow(Icons.Default.VerticalSplit, "Split screen view", hasActivePage) { onSplitScreen(); onDismiss() }
+                    MenuRow(Icons.Default.Download, "Downloads", true) { onOpenDownloads(); onDismiss() }
+                    MenuRow(Icons.Default.MenuBook, "Reading list", true) { onOpenReadingList(); onDismiss() }
+                    MenuRow(Icons.Default.QrCode, "Share visual QR card", hasActivePage) { onOpenShareCard(); onDismiss() }
+                    MenuRow(Icons.Default.SaveAlt, "Save page offline", hasActivePage) { onSaveOffline(); onDismiss() }
+                    MenuRow(Icons.Default.Code, "View page source", hasActivePage) { onViewSource(); onDismiss() }
+                    MenuRow(Icons.Default.DesktopWindows, if (isDesktopMode) "Switch to mobile site" else "Request desktop site", hasActivePage) { onToggleDesktopMode(); onDismiss() }
+                    MenuRow(Icons.Default.Fullscreen, if (isCompactMode) "Disable compact mode" else "Enable compact mode", true) { onToggleCompactMode(); onDismiss() }
+                    MenuRow(Icons.Default.Search, "Find in page", hasActivePage) { onFindInPage(); onDismiss() }
+                    MenuRow(Icons.Default.Share, "Share page", hasActivePage) { onShare(); onDismiss() }
+                    MenuRow(Icons.Default.ContentCopy, "Copy link", hasActivePage) { onCopyUrl(); onDismiss() }
+                    MenuRow(Icons.Default.History, "History", true) { onOpenHistory(); onDismiss() }
+                    MenuRow(Icons.Default.Settings, "Settings", true) { onOpenSettings(); onDismiss() }
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
@@ -176,14 +202,40 @@ fun BrowserSettingsDialog(
                     SettingsToggleRow("Zen compact mode", "Hide top title bar while browsing", settings.compactMode) {
                         onUpdate(settings.copy(compactMode = it))
                     }
+                    SettingsToggleRow("Edge swipe navigation", "Swipe from left/right edges to navigate back/forward", settings.edgeGesturesEnabled) {
+                        onUpdate(settings.copy(edgeGesturesEnabled = it))
+                    }
+                    SettingsToggleRow("One-handed reachability", "Pull viewport down for easy one-hand thumb reach", settings.reachabilityEnabled) {
+                        onUpdate(settings.copy(reachabilityEnabled = it))
+                    }
                     SettingsToggleRow("Block audible autoplay", "Stop websites from auto-playing sound", settings.blockAudibleAutoplay) {
                         onUpdate(settings.copy(blockAudibleAutoplay = it))
                     }
                     SettingsToggleRow("Desktop mode by default", "Open new tabs with desktop user-agent", settings.desktopModeDefault) {
                         onUpdate(settings.copy(desktopModeDefault = it))
                     }
-                    SettingsToggleRow("Tracking protection", "Enable GeckoView tracking protection", settings.trackingProtection) {
+                    SettingsToggleRow("Tracking & ad protection", "Block trackers, cryptominers, and ad networks", settings.trackingProtection) {
                         onUpdate(settings.copy(trackingProtection = it))
+                    }
+                }
+                item {
+                    Spacer(Modifier.height(10.dp))
+                    Text("Secure DNS (DNS-over-HTTPS)", color = DialogAccent, fontSize = 12.sp)
+                    Spacer(Modifier.height(4.dp))
+                }
+                items(DohProvider.entries) { provider ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onUpdate(settings.copy(dohProvider = provider)) }.padding(vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = settings.dohProvider == provider, onClick = { onUpdate(settings.copy(dohProvider = provider)) })
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(provider.label, color = Color.White, fontSize = 13.sp)
+                            if (provider.endpoint.isNotBlank()) {
+                                Text(provider.endpoint, color = DialogMuted, fontSize = 10.sp)
+                            }
+                        }
                     }
                 }
             }

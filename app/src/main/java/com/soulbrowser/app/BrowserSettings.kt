@@ -20,7 +20,10 @@ data class BrowserSettings(
     val compactMode: Boolean = false,
     val desktopModeDefault: Boolean = false,
     val blockAudibleAutoplay: Boolean = true,
-    val trackingProtection: Boolean = true
+    val trackingProtection: Boolean = true,
+    val reachabilityEnabled: Boolean = false,
+    val edgeGesturesEnabled: Boolean = true,
+    val dohProvider: DohProvider = DohProvider.SYSTEM
 )
 
 object BrowserSettingsStore {
@@ -30,6 +33,9 @@ object BrowserSettingsStore {
     private const val KEY_DESKTOP = "desktop_mode_default"
     private const val KEY_AUTOPLAY = "block_audible_autoplay"
     private const val KEY_TRACKING = "tracking_protection"
+    private const val KEY_REACHABILITY = "reachability_enabled"
+    private const val KEY_EDGE_GESTURES = "edge_gestures_enabled"
+    private const val KEY_DOH = "doh_provider"
 
     fun load(context: Context): BrowserSettings {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -38,7 +44,10 @@ object BrowserSettingsStore {
             compactMode = prefs.getBoolean(KEY_COMPACT, false),
             desktopModeDefault = prefs.getBoolean(KEY_DESKTOP, false),
             blockAudibleAutoplay = prefs.getBoolean(KEY_AUTOPLAY, true),
-            trackingProtection = prefs.getBoolean(KEY_TRACKING, true)
+            trackingProtection = prefs.getBoolean(KEY_TRACKING, true),
+            reachabilityEnabled = prefs.getBoolean(KEY_REACHABILITY, false),
+            edgeGesturesEnabled = prefs.getBoolean(KEY_EDGE_GESTURES, true),
+            dohProvider = DohProvider.fromName(prefs.getString(KEY_DOH, null))
         )
     }
 
@@ -49,6 +58,9 @@ object BrowserSettingsStore {
             .putBoolean(KEY_DESKTOP, settings.desktopModeDefault)
             .putBoolean(KEY_AUTOPLAY, settings.blockAudibleAutoplay)
             .putBoolean(KEY_TRACKING, settings.trackingProtection)
+            .putBoolean(KEY_REACHABILITY, settings.reachabilityEnabled)
+            .putBoolean(KEY_EDGE_GESTURES, settings.edgeGesturesEnabled)
+            .putString(KEY_DOH, settings.dohProvider.name)
             .apply()
     }
 }

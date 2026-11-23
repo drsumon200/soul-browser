@@ -142,6 +142,9 @@ object BrowserSessionEnhancer {
                     hooksBySession[s]?.onExternalScheme?.invoke(request.uri)
                     return GeckoResult.deny()
                 }
+                if (trackingProtection && AdblockFilterEngine.isBlocked(request.uri)) {
+                    return GeckoResult.deny()
+                }
                 return baseNavigation?.onLoadRequest(s, request) ?: GeckoResult.allow()
             }
 
