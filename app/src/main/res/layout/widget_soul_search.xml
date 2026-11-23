@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_search_root"
+    android:layout_width="match_parent"
+    android:layout_height="52dp"
+    android:background="#1A1C24"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp">
+
+    <TextView
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:background="#A7B5FF"
+        android:gravity="center"
+        android:text="S"
+        android:textColor="#101116"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:text="Search with Soul Browser..."
+        android:textColor="#9BA0B1"
+        android:textSize="14sp" />
+</LinearLayout>

@@ -34,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
@@ -69,16 +71,20 @@ private val Muted = Color(0xFF9BA0B1)
 
 class MainActivity : ComponentActivity() {
     private val incomingUrlState = mutableStateOf<String?>(null)
+    private val incomingShortcutState = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         incomingUrlState.value = extractIntentUrl(intent)
+        incomingShortcutState.value = intent?.getStringExtra(AppShortcutsPublisher.EXTRA_ACTION)
         val runtime = (application as SoulApplication).geckoRuntime
         setContent {
             SoulApp(
                 runtime = runtime,
                 incomingUrl = incomingUrlState.value,
-                onIncomingUrlConsumed = { incomingUrlState.value = null }
+                onIncomingUrlConsumed = { incomingUrlState.value = null },
+                incomingShortcutAction = incomingShortcutState.value,
+                onShortcutConsumed = { incomingShortcutState.value = null }
             )
         }
     }
@@ -87,6 +93,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         incomingUrlState.value = extractIntentUrl(intent)
+        incomingShortcutState.value = intent.getStringExtra(AppShortcutsPublisher.EXTRA_ACTION)
     }
 
     private fun extractIntentUrl(intent: Intent?): String? =
@@ -124,7 +131,9 @@ private fun extractDownloadFileName(response: WebResponse): String {
 private fun SoulApp(
     runtime: GeckoRuntime,
     incomingUrl: String? = null,
-    onIncomingUrlConsumed: () -> Unit = {}
+    onIncomingUrlConsumed: () -> Unit = {},
+    incomingShortcutAction: String? = null,
+    onShortcutConsumed: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val activity = context as Activity
@@ -132,6 +141,8 @@ private fun SoulApp(
     val keyboardController = LocalSoftwareKeyboardController.current
     val browserViewModel: BrowserViewModel = viewModel()
     val coroutineScope = rememberCoroutineScope()
+    val addressFocusRequester = remember { FocusRequester() }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var pendingFilePrompt by browserViewModel.pendingFilePromptState
     var pendingDownload by browserViewModel.pendingDownloadState
@@ -208,7 +219,54 @@ private fun SoulApp(
     var bookmarks by browserViewModel.bookmarksState
     var activeTabId by browserViewModel.activeTabIdState
 
+    var showDevTools by remember { mutableStateOf(false) }
+    var showSessionHistory by remember { mutableStateOf(false) }
+    var swipePreviewTitle by remember { mutableStateOf<String?>(null) }
+    val windowClass = rememberBrowserWindowClass()
+    var showBackupMessage by remember { mutableStateOf<String?>(null) }
+
+    val backupExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                val output = context.contentResolver.openOutputStream(uri) ?: error("Cannot open backup destination")
+                output.bufferedWriter().use { it.write(BackupRestoreManager.exportJson(context)) }
+            }.onSuccess {
+                Toast.makeText(context, "Backup exported", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                Toast.makeText(context, "Backup export failed", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    val backupImportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: error("Cannot read backup file")
+                if (!BackupRestoreManager.importJson(context, json)) error("Invalid backup")
+                containers = SoulStore.loadContainers(context)
+                workspaces = SoulStore.loadWorkspaces(context, containers.first().id)
+                activeContainer = containers.first()
+                activeWorkspace = workspaces.first()
+                bookmarks = SoulStore.loadBookmarks(context)
+                browserViewModel.containersState.value = containers
+                browserViewModel.workspacesState.value = workspaces
+                browserViewModel.activeContainerState.value = activeContainer
+                browserViewModel.activeWorkspaceState.value = activeWorkspace
+                browserViewModel.bookmarksState.value = bookmarks
+            }.onSuccess {
+                Toast.makeText(context, "Backup restored", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                Toast.makeText(context, "Backup restore failed", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     var settings by remember { mutableStateOf(BrowserSettingsStore.load(context)) }
+    val networkStatus by NetworkConnectivityMonitor.observe(context).collectAsState(initial = NetworkStatus(isOnline = true, isMetered = false))
     var history by remember { mutableStateOf(HistoryStore.load(context)) }
     var isFullscreen by remember { mutableStateOf(false) }
     var showFindBar by remember { mutableStateOf(false) }
@@ -720,9 +778,27 @@ private fun SoulApp(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(incomingShortcutAction) {
         restoreSavedTabs()
-        if (tabs.isEmpty()) createTab()
+        val hadExistingTabs = tabs.isNotEmpty()
+        if (tabs.isEmpty() && incomingShortcutAction != AppShortcutsPublisher.ACTION_PRIVATE_TAB) createTab()
+        when (incomingShortcutAction) {
+            AppShortcutsPublisher.ACTION_NEW_TAB -> if (hadExistingTabs) createTab()
+            AppShortcutsPublisher.ACTION_PRIVATE_TAB -> {
+                val privateContainer = containers.firstOrNull { it.isPrivate }
+                    ?: BrowserContainer(name = "Private", color = 0xFFED8796, isPrivate = true).also {
+                        containers = containers + it
+                        SoulStore.saveContainers(context, containers)
+                        browserViewModel.containersState.value = containers
+                    }
+                createTab(containerOverride = privateContainer)
+            }
+            AppShortcutsPublisher.ACTION_SEARCH_WIDGET -> {
+                addressFocusRequester.requestFocus()
+                keyboardController?.show()
+            }
+        }
+        if (incomingShortcutAction != null) onShortcutConsumed()
     }
 
     MaterialTheme(
@@ -734,19 +810,23 @@ private fun SoulApp(
             onSurface = Color.White
         )
     ) {
-        Scaffold(containerColor = Ink) { padding ->
+        Scaffold(
+            containerColor = Ink,
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        ) { padding ->
             Column(
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
                     .background(Ink)
+                    .zenAmbientGlow(Lavender)
             ) {
                 if (!isFullscreen && !settings.compactMode) {
                     // Zen-inspired compact top bar and workspace switcher.
                     Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .padding(horizontal = if (windowClass == BrowserWindowClass.EXPANDED_TABLET) 28.dp else 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -818,6 +898,7 @@ private fun SoulApp(
                         onValueChange = { address = it },
                         modifier = Modifier
                             .weight(1f)
+                            .focusRequester(addressFocusRequester)
                             .padding(vertical = 12.dp)
                             .onFocusChanged { isAddressFocused = it.isFocused },
                         singleLine = true,
@@ -876,24 +957,33 @@ private fun SoulApp(
                     }
                 }
 
-                // Slim loading progress bar
+                WorkspacePillBar(
+                    workspaces = workspaces,
+                    activeWorkspaceId = activeWorkspace.id,
+                    onSelect = { switchWorkspace(it) }
+                )
                 if (activeTab?.isLoading == true && activeTab.url != "about:blank") {
-                    LinearProgressIndicator(
-                        progress = { activeTab.progress.coerceIn(0, 100) / 100f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 4.dp)
-                            .height(2.dp)
-                            .clip(RoundedCornerShape(1.dp)),
-                        color = Lavender,
-                        trackColor = Panel2
-                    )
+                    ZenSmoothProgressBar(progress = activeTab.progress, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
                 } else {
                     Spacer(Modifier.height(10.dp))
                 }
 
                 }
 
+                OfflineStatusBanner(isOffline = !networkStatus.isOnline)
+                if (tabs.isNotEmpty()) {
+                    PerformanceHudChip(
+                        liveSessions = tabs.count { it.session != null },
+                        totalTabs = tabs.size,
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp)
+                    )
+                }
+                if (swipePreviewTitle != null) {
+                    TabSwipePreviewIndicator(
+                        targetTabTitle = swipePreviewTitle,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                }
                 // Main content area (HomePanel or single reused GeckoView)
                 val activeSession = activeTab?.session
                 if (activeTab == null || activeSession == null || activeTab.url == "about:blank") {
@@ -944,7 +1034,7 @@ private fun SoulApp(
                         .fillMaxWidth()
                         .padding(horizontal = 18.dp, vertical = 10.dp)
                         .clip(RoundedCornerShape(22.dp))
-                        .background(Panel)
+                         .zenGlassSurface()
                         .pointerInput(workspaces, activeWorkspace.id) {
                             var dragX = 0f
                             var dragY = 0f
@@ -963,14 +1053,21 @@ private fun SoulApp(
                                     }
                                     dragX = 0f
                                     dragY = 0f
+                                    swipePreviewTitle = null
                                 },
                                 onDragCancel = {
                                     dragX = 0f
                                     dragY = 0f
+                                    swipePreviewTitle = null
                                 },
                                 onDrag = { change, amount ->
                                     dragX += amount.x
                                     dragY += amount.y
+                                    if (abs(dragX) > 24f && abs(dragX) > abs(dragY)) {
+                                        val currentIndex = workspaces.indexOfFirst { it.id == activeWorkspace.id }
+                                        val targetIndex = (currentIndex + if (dragX < 0) 1 else -1).coerceIn(0, workspaces.lastIndex)
+                                        swipePreviewTitle = workspaces.getOrNull(targetIndex)?.name
+                                    }
                                     change.consume()
                                 }
                             )
@@ -1045,7 +1142,13 @@ private fun SoulApp(
                 onShare = { activeTab?.let { BrowserActions.shareUrl(context, it.url, it.title) } },
                 onCopyUrl = { activeTab?.let { BrowserActions.copyToClipboard(context, it.url) } },
                 onOpenHistory = { history = HistoryStore.load(context); showHistory = true },
+                onOpenTabHistory = { history = HistoryStore.load(context); showSessionHistory = true },
                 onOpenSettings = { showSettings = true },
+                onOpenDevTools = { showDevTools = true },
+                onRequestDefaultBrowser = { activity.startActivity(DefaultBrowserPrompt.createRequestIntent(context)) },
+                onExportBackup = { backupExportLauncher.launch("soul-browser-backup.json") },
+                onImportBackup = { backupImportLauncher.launch(arrayOf("application/json", "text/*")) },
+                onPinWebsite = { activeTab?.let { PwaShortcutCreator.pinWebsiteToHome(context, it.title, it.url) } },
                 onDismiss = { showMoreMenu = false }
             )
         }
@@ -1057,6 +1160,28 @@ private fun SoulApp(
                 onDeleteEntry = { history = HistoryStore.remove(context, it) },
                 onClearAll = { history = HistoryStore.clear(context) },
                 onDismiss = { showHistory = false }
+            )
+        }
+
+        if (showSessionHistory) {
+            val currentHost = activeTab?.url?.let(::extractDisplayHost).orEmpty()
+            val siteTrail = history.filter { extractDisplayHost(it.url) == currentHost }.take(30)
+            SessionBackHistorySheet(
+                trail = siteTrail,
+                onJumpToUrl = { navigateTo(it) },
+                onDismiss = { showSessionHistory = false }
+            )
+        }
+
+        if (showDevTools) {
+            MobileDevToolsSheet(
+                activeTab = activeTab,
+                activeSessionCount = tabs.count { it.session != null },
+                onSelectUaProfile = { UserAgentSpoofer.apply(activeTab?.session, it) },
+                onViewSource = {
+                    activeTab?.url?.takeIf { isHttpUrl(it) }?.let { activeTab.session?.loadUri("view-source:$it") }
+                },
+                onDismiss = { showDevTools = false }
             )
         }
 
@@ -1118,11 +1243,7 @@ private fun SoulApp(
                                         .padding(horizontal = 8.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        Icons.Default.Language,
-                                        null,
-                                        tint = if (isCurrent) Lavender else Muted
-                                    )
+                                    FaviconAvatar(tab.url, size = 24.dp, fallbackColor = if (isCurrent) Lavender else Muted)
                                     Spacer(Modifier.width(10.dp))
                                     Text(
                                         tab.title.ifBlank { tab.url.ifBlank { "New Tab" } },
@@ -1398,8 +1519,18 @@ private fun SoulApp(
                                     }
                                     IconButton(
                                         onClick = {
-                                            bookmarks = bookmarks.filterNot { it.url == item.url }
+                                            val removedBookmark = item
+                                            bookmarks = bookmarks.filterNot { it.url == removedBookmark.url }
                                             SoulStore.saveBookmarks(context, bookmarks)
+                                            coroutineScope.launch {
+                                                snackbarHostState.showUndoPrompt(
+                                                    message = "Bookmark removed",
+                                                    onUndo = {
+                                                        bookmarks = bookmarks + removedBookmark
+                                                        SoulStore.saveBookmarks(context, bookmarks)
+                                                    }
+                                                )
+                                            }
                                         }
                                     ) {
                                         Icon(Icons.Default.Close, "Remove bookmark", tint = Muted)
