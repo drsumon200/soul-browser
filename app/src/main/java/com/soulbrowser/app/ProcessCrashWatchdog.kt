@@ -1,0 +1,3 @@
+package com.soulbrowser.app
+import java.util.concurrent.ConcurrentHashMap
+object ProcessCrashWatchdog { private const val WINDOW_MS=20000L; private const val MAX=2; private val times=ConcurrentHashMap<String,MutableList<Long>>(); fun shouldAutoRecover(id:String):Boolean{val now=System.currentTimeMillis();val l=times.getOrPut(id){mutableListOf()};synchronized(l){l.removeAll{now-it>WINDOW_MS};if(l.size>=MAX)return false;l.add(now);return true}};fun reset(id:String){times.remove(id)} }
