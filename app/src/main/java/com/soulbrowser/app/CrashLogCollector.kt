@@ -18,7 +18,8 @@ object CrashLogCollector {
                     "Thread: ${thread.name}\nTime: ${System.currentTimeMillis()}\n\n$stack"
                 )
             }
-            previous?.uncaughtException(thread, throwable)
+            if (previous != null) previous.uncaughtException(thread, throwable)
+            else thread.threadGroup.uncaughtException(thread, throwable)
         }
     }
 
