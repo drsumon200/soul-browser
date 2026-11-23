@@ -29,7 +29,7 @@ object HistoryStore {
     }
 
     fun record(context: Context, url: String, title: String?, isPrivate: Boolean): List<HistoryEntry> {
-        if (isPrivate || !url.startsWith("http", ignoreCase = true)) return load(context)
+        if (isPrivate || !isHttpUrl(url)) return load(context)
         val entry = HistoryEntry(
             url = url,
             title = title?.takeIf { it.isNotBlank() } ?: extractDisplayHost(url).ifBlank { url }
