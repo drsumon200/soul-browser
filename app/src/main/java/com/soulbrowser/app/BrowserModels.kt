@@ -48,6 +48,12 @@ data class BrowserBookmark(
     val title: String
 )
 
+/** A user-defined website shortcut shown on the browser's home screen. */
+data class SpeedDialItem(
+    val title: String,
+    val url: String
+)
+
 object SoulStore {
     private const val PREFS = "soul_browser_store"
     private const val CONTAINERS = "containers"
