@@ -142,6 +142,7 @@ private fun SoulApp(
     val browserViewModel: BrowserViewModel = viewModel()
     val coroutineScope = rememberCoroutineScope()
     val addressFocusRequester = remember { FocusRequester() }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var pendingFilePrompt by browserViewModel.pendingFilePromptState
     var pendingDownload by browserViewModel.pendingDownloadState
@@ -808,7 +809,10 @@ private fun SoulApp(
             onSurface = Color.White
         )
     ) {
-        Scaffold(containerColor = Ink) { padding ->
+        Scaffold(
+            containerColor = Ink,
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        ) { padding ->
             Column(
                 Modifier
                     .fillMaxSize()
@@ -1503,8 +1507,18 @@ private fun SoulApp(
                                     }
                                     IconButton(
                                         onClick = {
-                                            bookmarks = bookmarks.filterNot { it.url == item.url }
+                                            val removedBookmark = item
+                                            bookmarks = bookmarks.filterNot { it.url == removedBookmark.url }
                                             SoulStore.saveBookmarks(context, bookmarks)
+                                            coroutineScope.launch {
+                                                snackbarHostState.showUndoPrompt(
+                                                    message = "Bookmark removed",
+                                                    onUndo = {
+                                                        bookmarks = bookmarks + removedBookmark
+                                                        SoulStore.saveBookmarks(context, bookmarks)
+                                                    }
+                                                )
+                                            }
                                         }
                                     ) {
                                         Icon(Icons.Default.Close, "Remove bookmark", tint = Muted)
