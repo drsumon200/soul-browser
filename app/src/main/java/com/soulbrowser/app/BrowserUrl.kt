@@ -52,8 +52,8 @@ internal fun extractDisplayHost(url: String): String {
 
 internal fun isHttpUrl(url: String): Boolean {
     val parsed = runCatching { URI(url) }.getOrNull() ?: return false
-    val scheme = parsed.scheme?.lowercase()
-    return scheme in setOf("http", "https") && !parsed.host.isNullOrBlank()
+    val scheme = parsed.scheme?.lowercase() ?: return false
+    return (scheme == "http" || scheme == "https") && !parsed.host.isNullOrBlank()
 }
 
 internal fun isHttpsUrl(url: String): Boolean {
