@@ -2175,6 +2175,7 @@ private fun SoulApp(
                                 }
                             }
                         }
+                    }
                 },
                 confirmButton = {
                     TextButton(
@@ -2212,7 +2213,6 @@ private fun SoulApp(
                 }
             )
         }
-    }
     }
 
 @OptIn(ExperimentalFoundationApi::class)

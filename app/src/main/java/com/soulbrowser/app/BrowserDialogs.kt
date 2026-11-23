@@ -59,6 +59,8 @@ private val DialogText = SoulColors.Text
 
 @Composable
 fun BrowserMoreMenuDialog(
+    isDarkMode: Boolean = true,
+    onToggleDarkMode: () -> Unit = {},
     isDesktopMode: Boolean,
     isCompactMode: Boolean,
     hasActivePage: Boolean,
