@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.sp
 fun SessionBackHistorySheet(trail: List<HistoryEntry>, onJumpToUrl: (String) -> Unit, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = SoulColors.Panel) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(bottom = 24.dp)) {
-            Text("Tab History", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text("Recent pages on this site", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             LazyColumn(Modifier.heightIn(max = 300.dp)) {
                 items(trail) { item ->
                     Column(Modifier.fillMaxWidth().clickable { onJumpToUrl(item.url); onDismiss() }.padding(vertical = 10.dp)) {
