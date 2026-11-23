@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
@@ -20,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsManagerSheet(records: List<DownloadRecord>, onDeleteRecord: (String) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -40,7 +42,7 @@ fun DownloadsManagerSheet(records: List<DownloadRecord>, onDeleteRecord: (String
                     }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(item.fileName, color = Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(BrowserDownloadManager.formatBytes(item.sizeBytes), color = SoulColors.Muted, fontSize = 11.sp)
+                            Text(formatDownloadBytes(item.sizeBytes), color = SoulColors.Muted, fontSize = 11.sp)
                         }
                         IconButton(onClick = { onDeleteRecord(item.id) }) { Icon(Icons.Default.DeleteOutline, "Remove", tint = SoulColors.Muted) }
                     }
@@ -48,4 +50,12 @@ fun DownloadsManagerSheet(records: List<DownloadRecord>, onDeleteRecord: (String
             }
         }
     }
+}
+private fun formatDownloadBytes(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val units = arrayOf("KB", "MB", "GB", "TB")
+    var value = bytes.toDouble()
+    var index = -1
+    do { value /= 1024.0; index++ } while (value >= 1024 && index < units.lastIndex)
+    return String.format(java.util.Locale.US, "%.1f %s", value, units[index])
 }
