@@ -13,7 +13,7 @@ object SmartUrlHighlighter {
         if (start < 0) { append(url); return@buildAnnotatedString }
         val end = start + host.length
         pushStyle(SpanStyle(color = SoulColors.Muted)); append(url.substring(0, start)); pop()
-        pushStyle(SpanStyle(color = Color.White, fontWeight = FontWeight.SemiBold)); append(url.substring(start, end)); pop()
+        pushStyle(SpanStyle(color = SoulColors.Text, fontWeight = FontWeight.SemiBold)); append(url.substring(start, end)); pop()
         pushStyle(SpanStyle(color = SoulColors.Muted)); append(url.substring(end)); pop()
     }
 }

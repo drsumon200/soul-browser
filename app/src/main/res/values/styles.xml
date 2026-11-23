@@ -2,12 +2,12 @@
 <resources>
     <style name="Theme.SoulBrowser" parent="android:Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:windowBackground">#101116</item>
-        <item name="android:colorPrimary">#A7B5FF</item>
-        <item name="android:colorAccent">#A7B5FF</item>
-        <item name="android:statusBarColor">#101116</item>
-        <item name="android:navigationBarColor">#101116</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowBackground">#F9FAFD</item>
+        <item name="android:colorPrimary">#6366F1</item>
+        <item name="android:colorAccent">#6366F1</item>
+        <item name="android:statusBarColor">#F9FAFD</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

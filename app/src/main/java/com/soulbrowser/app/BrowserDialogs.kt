@@ -49,9 +49,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val DialogPanel = Color(0xFF1A1C24)
-private val DialogAccent = Color(0xFFA7B5FF)
-private val DialogMuted = Color(0xFF9BA0B1)
+private val DialogPanel = SoulColors.Panel
+private val DialogAccent = SoulColors.Lavender
+private val DialogMuted = SoulColors.Muted
+private val DialogText = SoulColors.Text
 
 @Composable
 fun BrowserMoreMenuDialog(
@@ -78,7 +79,7 @@ fun BrowserMoreMenuDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = DialogPanel,
-        title = { Text("Browser menu", color = Color.White) },
+        title = { Text("Browser menu", color = DialogText, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
         text = {
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
                 item {
@@ -112,7 +113,7 @@ private fun MenuRow(icon: ImageVector, label: String, enabled: Boolean, onClick:
     ) {
         Icon(icon, contentDescription = label, tint = if (enabled) DialogAccent else DialogMuted.copy(alpha = 0.4f))
         Spacer(Modifier.width(12.dp))
-        Text(label, color = if (enabled) Color.White else DialogMuted.copy(alpha = 0.4f), fontSize = 14.sp)
+        Text(label, color = if (enabled) DialogText else DialogMuted.copy(alpha = 0.4f), fontSize = 14.sp)
     }
 }
 
@@ -133,7 +134,7 @@ fun BrowserHistoryDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = DialogPanel,
-        title = { Text("History", color = Color.White) },
+        title = { Text("History", color = DialogText, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
         text = {
             Column(Modifier.fillMaxWidth()) {
                 OutlinedTextField(
@@ -154,7 +155,7 @@ fun BrowserHistoryDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(entry.title, color = Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(entry.title, color = DialogText, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(entry.url, color = DialogMuted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                                 TextButton(onClick = { onDeleteEntry(entry.url) }) { Text("Remove") }
@@ -165,9 +166,9 @@ fun BrowserHistoryDialog(
             }
         },
         dismissButton = {
-            if (entries.isNotEmpty()) TextButton(onClick = onClearAll) { Text("Clear all") }
+            if (entries.isNotEmpty()) TextButton(onClick = onClearAll) { Text("Clear all", color = SoulColors.Rose) }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = DialogAccent) } }
     )
 }
 
@@ -180,11 +181,11 @@ fun BrowserSettingsDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = DialogPanel,
-        title = { Text("Settings", color = Color.White) },
+        title = { Text("Settings", color = DialogText, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
         text = {
             LazyColumn(Modifier.heightIn(max = 380.dp)) {
                 item {
-                    Text("Search engine", color = DialogAccent, fontSize = 12.sp)
+                    Text("Search engine", color = DialogAccent, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
                     Spacer(Modifier.height(4.dp))
                 }
                 items(SearchEngine.entries) { engine ->
@@ -194,7 +195,7 @@ fun BrowserSettingsDialog(
                     ) {
                         RadioButton(selected = settings.searchEngine == engine, onClick = { onUpdate(settings.copy(searchEngine = engine)) })
                         Spacer(Modifier.width(8.dp))
-                        Text(engine.label, color = Color.White, fontSize = 14.sp)
+                        Text(engine.label, color = DialogText, fontSize = 14.sp)
                     }
                 }
                 item {
@@ -220,7 +221,7 @@ fun BrowserSettingsDialog(
                 }
                 item {
                     Spacer(Modifier.height(10.dp))
-                    Text("Secure DNS (DNS-over-HTTPS)", color = DialogAccent, fontSize = 12.sp)
+                    Text("Secure DNS (DNS-over-HTTPS)", color = DialogAccent, fontSize = 12.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
                     Spacer(Modifier.height(4.dp))
                 }
                 items(DohProvider.entries) { provider ->
@@ -231,7 +232,7 @@ fun BrowserSettingsDialog(
                         RadioButton(selected = settings.dohProvider == provider, onClick = { onUpdate(settings.copy(dohProvider = provider)) })
                         Spacer(Modifier.width(8.dp))
                         Column {
-                            Text(provider.label, color = Color.White, fontSize = 13.sp)
+                            Text(provider.label, color = DialogText, fontSize = 13.sp)
                             if (provider.endpoint.isNotBlank()) {
                                 Text(provider.endpoint, color = DialogMuted, fontSize = 10.sp)
                             }
@@ -240,7 +241,7 @@ fun BrowserSettingsDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = DialogAccent) } }
     )
 }
 
@@ -248,7 +249,7 @@ fun BrowserSettingsDialog(
 private fun SettingsToggleRow(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = Color.White, fontSize = 14.sp)
+            Text(title, color = DialogText, fontSize = 14.sp)
             Text(subtitle, color = DialogMuted, fontSize = 11.sp)
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
@@ -267,15 +268,15 @@ fun RenameWorkspaceDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = DialogPanel,
-        title = { Text("Edit workspace", color = Color.White) },
+        title = { Text("Edit workspace", color = DialogText, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
         text = {
             OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Workspace name") }, singleLine = true)
         },
         dismissButton = {
-            if (canDelete) TextButton(onClick = { onDelete(); onDismiss() }) { Text("Delete", color = Color(0xFFED8796)) }
+            if (canDelete) TextButton(onClick = { onDelete(); onDismiss() }) { Text("Delete", color = SoulColors.Rose) }
         },
         confirmButton = {
-            TextButton(onClick = { if (name.isNotBlank()) onRename(name.trim()); onDismiss() }) { Text("Save") }
+            TextButton(onClick = { if (name.isNotBlank()) onRename(name.trim()); onDismiss() }) { Text("Save", color = DialogAccent) }
         }
     )
 }

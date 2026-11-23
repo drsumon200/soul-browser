@@ -17,12 +17,12 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun ViewSourceDialog(url: String, htmlSource: String, onCopy: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(onDismissRequest = onDismiss, containerColor = SoulColors.Panel,
-        title = { Text("Source · ${extractDisplayHost(url)}", color = Color.White, fontSize = 15.sp) },
+        title = { Text("Source · ${extractDisplayHost(url)}", color = SoulColors.Text, fontSize = 15.sp) },
         text = {
             Column(Modifier.fillMaxWidth().heightIn(max = 380.dp).verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())) {
-                Text(htmlSource.take(40_000), color = SoulColors.Mint, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                Text(htmlSource.take(40_000), color = SoulColors.Lavender, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
             }
         },
-        dismissButton = { TextButton(onClick = onCopy) { Text("Copy") } },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } })
+        dismissButton = { TextButton(onClick = onCopy) { Text("Copy", color = SoulColors.Lavender) } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = SoulColors.Lavender) } })
 }

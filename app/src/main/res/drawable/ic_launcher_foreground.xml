@@ -1,0 +1,42 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Fluid, Radiant Soul 'S' curves centered in 108dp circle/squircle -->
+    <path
+        android:pathData="M54,28 C42,28 33,36 33,46 C33,54 41,59 52,62 C62,65 67,67 67,72 C67,77 61,80 54,80 C46,80 40,76 38,70"
+        android:strokeWidth="9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="33"
+                android:startY="28"
+                android:endX="67"
+                android:endY="80"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFFFFF" />
+                <item android:offset="0.7" android:color="#EDE9FE" />
+                <item android:offset="1.0" android:color="#BAE6FD" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Lower Dynamic Mirror Arc -->
+    <path
+        android:pathData="M54,80 C66,80 75,72 75,62 C75,54 67,49 56,46 C46,43 41,41 41,36 C41,31 47,28 54,28 C61,28 66,31 69,36"
+        android:strokeWidth="9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeAlpha="0.38"
+        android:strokeColor="#FFFFFF" />
+
+    <!-- Center Soul Focus Core -->
+    <path
+        android:pathData="M54,51 C55.66,51 57,52.34 57,54 C57,55.66 55.66,57 54,57 C52.34,57 51,55.66 51,54 C51,52.34 52.34,51 54,51 Z"
+        android:fillColor="#FFFFFF" />
+
+</vector>

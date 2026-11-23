@@ -25,13 +25,13 @@ import androidx.compose.ui.unit.sp
 fun ReadingListSheet(items: List<ReadingListItem>, onOpen: (ReadingListItem) -> Unit, onToggleRead: (ReadingListItem) -> Unit, onDelete: (ReadingListItem) -> Unit, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = SoulColors.Panel) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp).padding(bottom = 26.dp)) {
-            Text("Reading List", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text("Reading List", color = SoulColors.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             if (items.isEmpty()) Text("Save articles to read distraction-free later.", color = SoulColors.Muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 14.dp))
             else LazyColumn(Modifier.heightIn(max = 360.dp)) {
                 items(items, key = { it.url }) { item ->
                     Row(Modifier.fillMaxWidth().clickable { onOpen(item); onDismiss() }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(item.title, color = if (item.isRead) SoulColors.Muted else Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(item.title, color = if (item.isRead) SoulColors.Muted else SoulColors.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(extractDisplayHost(item.url), color = SoulColors.Muted, fontSize = 11.sp)
                         }
                         IconButton(onClick = { onToggleRead(item) }) { Icon(Icons.Default.CheckCircle, "Mark read", tint = if (item.isRead) SoulColors.Mint else SoulColors.Muted) }

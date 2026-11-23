@@ -15,7 +15,7 @@ fun SpeedDialEditorDialog(initial: SpeedDialItem? = null, onSave: (SpeedDialItem
     var title by remember(initial) { mutableStateOf(initial?.title.orEmpty()) }
     var url by remember(initial) { mutableStateOf(initial?.url.orEmpty()) }
     AlertDialog(onDismissRequest = onDismiss, containerColor = SoulColors.Panel,
-        title = { Text(if (initial == null) "Add Shortcut" else "Edit Shortcut", color = Color.White) },
+        title = { Text(if (initial == null) "Add Shortcut" else "Edit Shortcut", color = SoulColors.Text, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
         text = { Column {
             OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Name") }, singleLine = true)
             Spacer(Modifier.height(8.dp))
@@ -26,5 +26,5 @@ fun SpeedDialEditorDialog(initial: SpeedDialItem? = null, onSave: (SpeedDialItem
             val normalized = normalizeAddress(url)
             if (normalized.isNotBlank()) onSave(SpeedDialItem(title.trim().ifBlank { extractDisplayHost(normalized) }, normalized))
             onDismiss()
-        }) { Text("Save") } })
+        }) { Text("Save", color = SoulColors.Lavender) } })
 }

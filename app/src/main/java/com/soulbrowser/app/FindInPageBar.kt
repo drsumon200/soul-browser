@@ -68,7 +68,9 @@ fun FindInPageBar(
 
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(16.dp)).background(Color(0xFF242733))
+            .border(1.dp, SoulColors.Border, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(SoulColors.Panel)
             .padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -77,26 +79,26 @@ fun FindInPageBar(
             onValueChange = { query = it; runFind(it) },
             modifier = Modifier.weight(1f).padding(vertical = 8.dp),
             singleLine = true,
-            cursorBrush = SolidColor(Color(0xFFA7B5FF)),
-            textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+            cursorBrush = SolidColor(SoulColors.Lavender),
+            textStyle = TextStyle(color = SoulColors.Text, fontSize = 14.sp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { runFind(query) }),
             decorationBox = { inner ->
-                if (query.isEmpty()) Text("Find in page", color = Color(0xFF9BA0B1), fontSize = 14.sp)
+                if (query.isEmpty()) Text("Find in page", color = SoulColors.Muted, fontSize = 14.sp)
                 inner()
             }
         )
         if (query.isNotEmpty()) {
-            Text("$currentMatch/$totalMatches", color = Color(0xFF9BA0B1), fontSize = 12.sp)
+            Text("$currentMatch/$totalMatches", color = SoulColors.Muted, fontSize = 12.sp)
         }
         IconButton(onClick = { runFind(null, GeckoSession.FINDER_FIND_BACKWARDS) }, enabled = query.isNotEmpty()) {
-            Icon(Icons.Default.KeyboardArrowUp, "Previous match", tint = Color.White)
+            Icon(Icons.Default.KeyboardArrowUp, "Previous match", tint = SoulColors.Text)
         }
         IconButton(onClick = { runFind(null) }, enabled = query.isNotEmpty()) {
-            Icon(Icons.Default.KeyboardArrowDown, "Next match", tint = Color.White)
+            Icon(Icons.Default.KeyboardArrowDown, "Next match", tint = SoulColors.Text)
         }
         IconButton(onClick = { runCatching { session?.finder?.clear() }; onClose() }) {
-            Icon(Icons.Default.Close, "Close find bar", tint = Color(0xFF9BA0B1))
+            Icon(Icons.Default.Close, "Close find bar", tint = SoulColors.Muted)
         }
     }
 }

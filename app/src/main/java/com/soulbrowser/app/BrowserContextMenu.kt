@@ -32,9 +32,9 @@ fun BrowserContextMenuDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1A1C24),
+        containerColor = SoulColors.Panel,
         title = {
-            Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 15.sp, color = Color.White)
+            Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 15.sp, color = SoulColors.Text, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
         },
         text = {
             Column(Modifier.fillMaxWidth()) {
@@ -56,7 +56,7 @@ fun BrowserContextMenuDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = SoulColors.Lavender) } }
     )
 }
 
@@ -64,7 +64,7 @@ fun BrowserContextMenuDialog(
 private fun ContextMenuAction(label: String, onClick: () -> Unit) {
     Text(
         label,
-        color = Color.White,
+        color = SoulColors.Text,
         fontSize = 14.sp,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp)
     )

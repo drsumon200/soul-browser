@@ -15,7 +15,7 @@ fun BookmarkEditorDialog(bookmark: BrowserBookmark, onSave: (BrowserBookmark) ->
     var title by remember(bookmark) { mutableStateOf(bookmark.title) }
     var url by remember(bookmark) { mutableStateOf(bookmark.url) }
     AlertDialog(onDismissRequest = onDismiss, containerColor = SoulColors.Panel,
-        title = { Text("Edit Bookmark", color = Color.White) },
+        title = { Text("Edit Bookmark", color = SoulColors.Text, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
         text = { Column {
             OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, singleLine = true)
             Spacer(Modifier.height(8.dp))
@@ -29,5 +29,5 @@ fun BookmarkEditorDialog(bookmark: BrowserBookmark, onSave: (BrowserBookmark) ->
             val target = normalizeAddress(url)
             if (target.isNotBlank()) onSave(bookmark.copy(title = title.trim().ifBlank { target }, url = target))
             onDismiss()
-        }) { Text("Save") } })
+        }) { Text("Save", color = SoulColors.Lavender) } })
 }

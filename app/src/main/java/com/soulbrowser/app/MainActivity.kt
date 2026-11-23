@@ -40,6 +40,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -934,12 +935,12 @@ private fun SoulApp(
     }
 
     MaterialTheme(
-        colorScheme = darkColorScheme(
+        colorScheme = lightColorScheme(
             background = Ink,
             surface = Panel,
             primary = Lavender,
-            onBackground = Color.White,
-            onSurface = Color.White
+            onBackground = SoulColors.Text,
+            onSurface = SoulColors.Text
         )
     ) {
         Scaffold(containerColor = Ink) { padding ->
@@ -964,11 +965,11 @@ private fun SoulApp(
                                 .background(Lavender),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("S", color = Ink, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                            Text("S", color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp)
                         }
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("Soul Browser", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                            Text("Soul Browser", color = SoulColors.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                             Text(activeWorkspace.name, color = Muted, fontSize = 11.sp)
                         }
                         // Privacy shield button with live counter badge
@@ -1008,12 +1009,12 @@ private fun SoulApp(
                             Box(
                                 Modifier
                                     .size(24.dp)
-                                    .border(1.5.dp, Color.White, RoundedCornerShape(6.dp)),
+                                    .border(1.5.dp, SoulColors.Text, RoundedCornerShape(6.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = if (workspaceTabCount > 99) "99+" else "$workspaceTabCount",
-                                    color = Color.White,
+                                    color = SoulColors.Text,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -1028,8 +1029,10 @@ private fun SoulApp(
                         Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp)
+                            .shadow(2.dp, RoundedCornerShape(18.dp))
                             .clip(RoundedCornerShape(18.dp))
-                            .background(Panel2)
+                            .background(Panel)
+                            .border(1.dp, SoulColors.Border, RoundedCornerShape(18.dp))
                             .padding(horizontal = 10.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1060,7 +1063,7 @@ private fun SoulApp(
                             cursorBrush = SolidColor(Lavender),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                             keyboardActions = KeyboardActions(onSearch = { submitAddress() }),
-                            textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                            textStyle = TextStyle(color = SoulColors.Text, fontSize = 14.sp),
                             decorationBox = { inner ->
                                 if (address.isEmpty()) {
                                     Text("Search or enter address", color = Muted, fontSize = 14.sp)
@@ -1133,9 +1136,10 @@ private fun SoulApp(
                                 address = calcResult
                                 submitAddress()
                             },
-                            color = Panel2,
+                            color = Panel,
                             shape = RoundedCornerShape(12.dp),
                             border = BorderStroke(1.dp, SoulColors.Mint.copy(alpha = 0.7f)),
+                            shadowElevation = 2.dp,
                             modifier = Modifier
                                 .padding(horizontal = 16.dp, vertical = 4.dp)
                                 .fillMaxWidth()
@@ -1146,15 +1150,17 @@ private fun SoulApp(
                             ) {
                                 Icon(Icons.Default.Calculate, null, tint = SoulColors.Mint, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(8.dp))
-                                Text("= $calcResult", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text("= $calcResult", color = SoulColors.Text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                 Spacer(Modifier.width(6.dp))
                                 Text("· Tap to calculate", color = Muted, fontSize = 11.sp)
                             }
                         }
                     } else if (isAddressFocused && address.startsWith("!")) {
                         Surface(
-                            color = Panel2,
+                            color = Panel,
                             shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, SoulColors.Border),
+                            shadowElevation = 2.dp,
                             modifier = Modifier
                                 .padding(horizontal = 16.dp, vertical = 4.dp)
                                 .fillMaxWidth()
@@ -1171,8 +1177,10 @@ private fun SoulApp(
                             Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 2.dp)
+                                .shadow(4.dp, RoundedCornerShape(14.dp))
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(Panel2)
+                                .background(Panel)
+                                .border(1.dp, SoulColors.Border, RoundedCornerShape(14.dp))
                                 .padding(vertical = 4.dp)
                         ) {
                             items(searchSuggestions) { suggestion ->
@@ -1188,7 +1196,7 @@ private fun SoulApp(
                                 ) {
                                     Icon(Icons.Default.Search, null, tint = Muted, modifier = Modifier.size(14.dp))
                                     Spacer(Modifier.width(10.dp))
-                                    Text(suggestion, color = Color.White, fontSize = 13.sp)
+                                    Text(suggestion, color = SoulColors.Text, fontSize = 13.sp)
                                 }
                             }
                         }
@@ -1290,7 +1298,7 @@ private fun SoulApp(
                                         factory = { viewContext ->
                                             GeckoView(viewContext).apply {
                                                 activeGeckoView = this
-                                                coverUntilFirstPaint(0xFF101116.toInt())
+                                                coverUntilFirstPaint(0xFFF8FAFC.toInt())
                                                 setSession(activeSession)
                                             }
                                         },
@@ -1298,7 +1306,7 @@ private fun SoulApp(
                                             activeGeckoView = geckoView
                                             if (geckoView.session !== activeSession) {
                                                 geckoView.releaseSession()
-                                                geckoView.coverUntilFirstPaint(0xFF101116.toInt())
+                                                geckoView.coverUntilFirstPaint(0xFFF8FAFC.toInt())
                                                 geckoView.setSession(activeSession)
                                             }
                                         },
@@ -1415,8 +1423,10 @@ private fun SoulApp(
                         Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 18.dp, vertical = 8.dp)
+                            .shadow(8.dp, RoundedCornerShape(22.dp))
                             .clip(RoundedCornerShape(22.dp))
                             .background(Panel)
+                            .border(1.dp, SoulColors.Border, RoundedCornerShape(22.dp))
                             .pointerInput(workspaces, activeWorkspace.id) {
                                 var dragX = 0f
                                 var dragY = 0f
@@ -1465,7 +1475,7 @@ private fun SoulApp(
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 "Back",
-                                tint = if (canBack) Color.White else Muted.copy(alpha = 0.35f)
+                                tint = if (canBack) SoulColors.Text else Muted.copy(alpha = 0.35f)
                             )
                         }
                         IconButton(
@@ -1478,7 +1488,7 @@ private fun SoulApp(
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowForward,
                                 "Forward",
-                                tint = if (canForward) Color.White else Muted.copy(alpha = 0.35f)
+                                tint = if (canForward) SoulColors.Text else Muted.copy(alpha = 0.35f)
                             )
                         }
                         IconButton(
@@ -1495,7 +1505,7 @@ private fun SoulApp(
                             Icon(
                                 if (activeTab?.isLoading == true) Icons.Default.Close else Icons.Default.Refresh,
                                 if (activeTab?.isLoading == true) "Stop" else "Reload",
-                                tint = if (activeTab?.session != null) Color.White else Muted.copy(alpha = 0.35f)
+                                tint = if (activeTab?.session != null) SoulColors.Text else Muted.copy(alpha = 0.35f)
                             )
                         }
                         IconButton(onClick = {
@@ -1505,13 +1515,13 @@ private fun SoulApp(
                             Icon(Icons.Default.Add, "New tab", tint = Lavender)
                         }
                         IconButton(onClick = { showMoreMenu = true }) {
-                            Icon(Icons.Default.MoreVert, "More options", tint = Color.White)
+                            Icon(Icons.Default.MoreVert, "More options", tint = SoulColors.Text)
                         }
                         IconButton(onClick = {
                             showVisualTabs = true
                             HapticFeedbackEngine.tick(activeGeckoView)
                         }) {
-                            Icon(Icons.Default.GridView, "Tab overview", tint = Color.White)
+                            Icon(Icons.Default.GridView, "Tab overview", tint = SoulColors.Text)
                         }
                     }
                 }
@@ -1816,7 +1826,7 @@ private fun SoulApp(
             AlertDialog(
                 onDismissRequest = { showSpaces = false },
                 containerColor = Panel,
-                title = { Text("Workspaces", color = Color.White) },
+                title = { Text("Workspaces", color = SoulColors.Text) },
                 text = {
                     Column {
                         LazyColumn(Modifier.heightIn(max = 320.dp)) {
@@ -1837,7 +1847,7 @@ private fun SoulApp(
                                         tint = if (space.id == activeWorkspace.id) Lavender else Muted
                                     )
                                     Spacer(Modifier.width(12.dp))
-                                    Text(space.name, Modifier.weight(1f), color = Color.White)
+                                    Text(space.name, Modifier.weight(1f), color = SoulColors.Text)
                                     IconButton(onClick = { editingWorkspace = space }) {
                                         Icon(Icons.Default.Edit, "Edit", tint = Muted)
                                     }
@@ -1859,7 +1869,7 @@ private fun SoulApp(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showSpaces = false }) { Text("Close") }
+                    TextButton(onClick = { showSpaces = false }) { Text("Close", color = Lavender) }
                 }
             )
         }
@@ -1899,7 +1909,7 @@ private fun SoulApp(
             AlertDialog(
                 onDismissRequest = { showContainers = false },
                 containerColor = Panel,
-                title = { Text("Containers", color = Color.White) },
+                title = { Text("Containers", color = SoulColors.Text) },
                 text = {
                     Column {
                         LazyColumn(Modifier.heightIn(max = 320.dp)) {
@@ -1937,7 +1947,7 @@ private fun SoulApp(
                                     Text(
                                         text = if (item.isPrivate) "${item.name} (Private)" else item.name,
                                         modifier = Modifier.weight(1f),
-                                        color = Color.White
+                                        color = SoulColors.Text
                                     )
                                     if (item.id == activeContainer.id) {
                                         Icon(Icons.Default.Check, null, tint = Lavender)
@@ -1965,7 +1975,7 @@ private fun SoulApp(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showContainers = false }) { Text("Close") }
+                    TextButton(onClick = { showContainers = false }) { Text("Close", color = Lavender) }
                 }
             )
         }
@@ -1974,11 +1984,11 @@ private fun SoulApp(
             AlertDialog(
                 onDismissRequest = { confirmClearContainer = null },
                 containerColor = Panel,
-                title = { Text("Clear ${targetContainer.name} data?", color = Color.White) },
+                title = { Text("Clear ${targetContainer.name} data?", color = SoulColors.Text) },
                 text = {
                     Text(
                         "This closes tabs in this container and deletes its cookies, session storage, and site cache.",
-                        color = Color.White
+                        color = SoulColors.Text
                     )
                 },
                 confirmButton = {
@@ -2007,7 +2017,7 @@ private fun SoulApp(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { confirmClearContainer = null }) { Text("Cancel") }
+                    TextButton(onClick = { confirmClearContainer = null }) { Text("Cancel", color = Muted) }
                 }
             )
         }
@@ -2017,7 +2027,7 @@ private fun SoulApp(
             AlertDialog(
                 onDismissRequest = { showBookmarks = false },
                 containerColor = Panel,
-                title = { Text("Bookmarks", color = Color.White) },
+                title = { Text("Bookmarks", color = SoulColors.Text) },
                 text = {
                     if (bookmarks.isEmpty()) {
                         Text("No bookmarks yet. Tap the star to bookmark a page.", color = Muted)
@@ -2041,7 +2051,7 @@ private fun SoulApp(
                                             item.title,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
-                                            color = Color.White
+                                            color = SoulColors.Text
                                         )
                                         Text(
                                             item.url,
@@ -2088,7 +2098,7 @@ private fun SoulApp(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showBookmarks = false }) { Text("Close") }
+                    TextButton(onClick = { showBookmarks = false }) { Text("Close", color = Lavender) }
                 }
             )
         }
@@ -2099,7 +2109,7 @@ private fun SoulApp(
                 onDismissRequest = { createDialog = null },
                 containerColor = Panel,
                 title = {
-                    Text(if (createDialog == "workspace") "New workspace" else "New container", color = Color.White)
+                    Text(if (createDialog == "workspace") "New workspace" else "New container", color = SoulColors.Text)
                 },
                 text = {
                     Column {
@@ -2122,7 +2132,7 @@ private fun SoulApp(
                                     onCheckedChange = { newContainerPrivate = it }
                                 )
                                 Column {
-                                    Text("Private container", fontSize = 14.sp, color = Color.White)
+                                    Text("Private container", fontSize = 14.sp, color = SoulColors.Text)
                                     Text(
                                         "Excludes tabs and history from persistent storage",
                                         color = Muted,
@@ -2165,7 +2175,7 @@ private fun SoulApp(
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { createDialog = null }) { Text("Cancel") }
+                    TextButton(onClick = { createDialog = null }) { Text("Cancel", color = Muted) }
                 }
             )
         }
@@ -2201,10 +2211,10 @@ private fun HomePanel(
                 .background(Lavender),
             contentAlignment = Alignment.Center
         ) {
-            Text("S", color = Ink, fontSize = 40.sp, fontWeight = FontWeight.Black)
+            Text("S", color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Black)
         }
         Spacer(Modifier.height(14.dp))
-        Text("Soul Browser", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text("Soul Browser", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = SoulColors.Text)
         Spacer(Modifier.height(4.dp))
         Text("A quieter way to browse.", color = Muted, fontSize = 13.sp)
 
@@ -2216,8 +2226,10 @@ private fun HomePanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                color = Panel2,
-                shape = RoundedCornerShape(999.dp)
+                color = Panel,
+                shape = RoundedCornerShape(999.dp),
+                border = BorderStroke(1.dp, SoulColors.Border),
+                shadowElevation = 1.dp
             ) {
                 Row(
                     Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -2232,7 +2244,7 @@ private fun HomePanel(
                     Spacer(Modifier.width(6.dp))
                     Text(
                         if (activeContainer.isPrivate) "${activeContainer.name} (Private)" else activeContainer.name,
-                        color = Color.White,
+                        color = SoulColors.Text,
                         fontSize = 11.sp
                     )
                 }
@@ -2240,8 +2252,10 @@ private fun HomePanel(
 
             Surface(
                 onClick = onOpenPrivacyShield,
-                color = Panel2,
-                shape = RoundedCornerShape(999.dp)
+                color = Panel,
+                shape = RoundedCornerShape(999.dp),
+                border = BorderStroke(1.dp, SoulColors.Border),
+                shadowElevation = 1.dp
             ) {
                 Row(
                     Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -2256,8 +2270,10 @@ private fun HomePanel(
             if (unreadArticles > 0) {
                 Surface(
                     onClick = onOpenReadingList,
-                    color = Panel2,
-                    shape = RoundedCornerShape(999.dp)
+                    color = Panel,
+                    shape = RoundedCornerShape(999.dp),
+                    border = BorderStroke(1.dp, SoulColors.Border),
+                    shadowElevation = 1.dp
                 ) {
                     Row(
                         Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -2283,8 +2299,10 @@ private fun HomePanel(
             items(speedDials, key = { it.url }) { item ->
                 Column(
                     Modifier
+                        .shadow(2.dp, RoundedCornerShape(14.dp))
                         .clip(RoundedCornerShape(14.dp))
-                        .background(Panel2)
+                        .background(Panel)
+                        .border(1.dp, SoulColors.Border, RoundedCornerShape(14.dp))
                         .combinedClickable(
                             onClick = { onOpenSpeedDial(item) },
                             onLongClick = { onEditSpeedDial(item) }
@@ -2309,7 +2327,7 @@ private fun HomePanel(
                     Spacer(Modifier.height(6.dp))
                     Text(
                         item.title,
-                        color = Color.White,
+                        color = SoulColors.Text,
                         fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -2321,8 +2339,10 @@ private fun HomePanel(
             item {
                 Column(
                     Modifier
+                        .shadow(1.dp, RoundedCornerShape(14.dp))
                         .clip(RoundedCornerShape(14.dp))
-                        .background(Panel2.copy(alpha = 0.5f))
+                        .background(Panel)
+                        .border(1.dp, SoulColors.Border, RoundedCornerShape(14.dp))
                         .clickable { onAddSpeedDial() }
                         .padding(vertical = 12.dp, horizontal = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally

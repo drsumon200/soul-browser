@@ -18,7 +18,7 @@ fun SplitViewHost(primarySession: GeckoSession, secondarySession: GeckoSession, 
     val ratio = splitRatio.coerceIn(0.25f, 0.75f)
     Column(modifier.fillMaxSize()) {
         Box(Modifier.weight(ratio).fillMaxWidth().clickable { onFocusPane(0) }) {
-            AndroidView(factory = { context -> GeckoView(context).apply { coverUntilFirstPaint(0xFF101116.toInt()); setSession(primarySession) } }, modifier = Modifier.fillMaxSize())
+            AndroidView(factory = { context -> GeckoView(context).apply { coverUntilFirstPaint(0xFFF8FAFC.toInt()); setSession(primarySession) } }, modifier = Modifier.fillMaxSize())
         }
         Box(Modifier.fillMaxWidth().height(14.dp).background(SoulColors.Panel).pointerInput(Unit) {
             detectDragGestures { change, drag -> change.consume(); onDragRatioDelta(drag.y / 1400f) }
@@ -26,7 +26,7 @@ fun SplitViewHost(primarySession: GeckoSession, secondarySession: GeckoSession, 
             Box(Modifier.width(42.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(if (focusedPane == 1) SoulColors.Mint else SoulColors.Lavender))
         }
         Box(Modifier.weight(1f - ratio).fillMaxWidth().clickable { onFocusPane(1) }) {
-            AndroidView(factory = { context -> GeckoView(context).apply { coverUntilFirstPaint(0xFF101116.toInt()); setSession(secondarySession) } }, modifier = Modifier.fillMaxSize())
+            AndroidView(factory = { context -> GeckoView(context).apply { coverUntilFirstPaint(0xFFF8FAFC.toInt()); setSession(secondarySession) } }, modifier = Modifier.fillMaxSize())
         }
     }
 }

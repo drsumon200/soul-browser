@@ -23,7 +23,7 @@ fun ReaderModeOverlay(article: ReaderArticle, onReadAloud: (String) -> Unit, onC
     var fontSizeSp by remember { mutableFloatStateOf(17f) }
     var sepiaTheme by remember { mutableStateOf(false) }
     val bg = if (sepiaTheme) Color(0xFFF6EFE2) else SoulColors.Ink
-    val fg = if (sepiaTheme) Color(0xFF2B241B) else Color(0xFFE6E8F2)
+    val fg = if (sepiaTheme) Color(0xFF2B241B) else SoulColors.Text
     val sub = if (sepiaTheme) Color(0xFF6E6252) else SoulColors.Muted
     val fullText = remember(article) { article.paragraphs.joinToString("\n\n") }
     Column(Modifier.fillMaxSize().background(bg).padding(horizontal = 20.dp, vertical = 14.dp)) {
@@ -32,7 +32,7 @@ fun ReaderModeOverlay(article: ReaderArticle, onReadAloud: (String) -> Unit, onC
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { fontSizeSp = (fontSizeSp - 2f).coerceAtLeast(13f) }) { Text("A-", color = fg) }
                 TextButton(onClick = { fontSizeSp = (fontSizeSp + 2f).coerceAtMost(26f) }) { Text("A+", color = fg) }
-                TextButton(onClick = { sepiaTheme = !sepiaTheme }) { Text(if (sepiaTheme) "Dark" else "Sepia", color = SoulColors.Lavender) }
+                TextButton(onClick = { sepiaTheme = !sepiaTheme }) { Text(if (sepiaTheme) "Zen Light" else "Sepia", color = SoulColors.Lavender) }
                 IconButton(onClick = { onReadAloud(fullText) }) { Icon(Icons.Default.VolumeUp, "Read aloud", tint = SoulColors.Lavender) }
                 IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Close reader", tint = fg) }
             }

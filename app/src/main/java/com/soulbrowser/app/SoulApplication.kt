@@ -36,7 +36,7 @@ object GeckoRuntimeProvider {
                 .build()
 
             val settings = GeckoRuntimeSettings.Builder()
-                .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_DARK)
+                .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_LIGHT)
                 .contentBlocking(contentBlocking)
                 .aboutConfigEnabled(isDebuggable)
                 .remoteDebuggingEnabled(isDebuggable)
