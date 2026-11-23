@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.soulbrowser.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.soulbrowser.app"
