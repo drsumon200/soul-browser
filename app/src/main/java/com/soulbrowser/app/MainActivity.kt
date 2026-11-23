@@ -262,6 +262,7 @@ private fun SoulApp(
     }
 
     var settings by remember { mutableStateOf(BrowserSettingsStore.load(context)) }
+    val networkStatus by NetworkConnectivityMonitor.observe(context).collectAsState(initial = NetworkStatus(isOnline = true, isMetered = false))
     var history by remember { mutableStateOf(HistoryStore.load(context)) }
     var isFullscreen by remember { mutableStateOf(false) }
     var showFindBar by remember { mutableStateOf(false) }
@@ -775,9 +776,10 @@ private fun SoulApp(
 
     LaunchedEffect(incomingShortcutAction) {
         restoreSavedTabs()
-        if (tabs.isEmpty()) createTab()
+        val hadExistingTabs = tabs.isNotEmpty()
+        if (tabs.isEmpty() && incomingShortcutAction != AppShortcutsPublisher.ACTION_PRIVATE_TAB) createTab()
         when (incomingShortcutAction) {
-            AppShortcutsPublisher.ACTION_NEW_TAB -> if (tabs.isNotEmpty()) createTab()
+            AppShortcutsPublisher.ACTION_NEW_TAB -> if (hadExistingTabs) createTab()
             AppShortcutsPublisher.ACTION_PRIVATE_TAB -> {
                 val privateContainer = containers.firstOrNull { it.isPrivate }
                     ?: BrowserContainer(name = "Private", color = 0xFFED8796, isPrivate = true).also {
@@ -960,6 +962,14 @@ private fun SoulApp(
 
                 }
 
+                OfflineStatusBanner(isOffline = !networkStatus.isOnline)
+                if (tabs.isNotEmpty()) {
+                    PerformanceHudChip(
+                        liveSessions = tabs.count { it.session != null },
+                        totalTabs = tabs.size,
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp)
+                    )
+                }
                 // Main content area (HomePanel or single reused GeckoView)
                 val activeSession = activeTab?.session
                 if (activeTab == null || activeSession == null || activeTab.url == "about:blank") {
@@ -1116,6 +1126,7 @@ private fun SoulApp(
                 onRequestDefaultBrowser = { activity.startActivity(DefaultBrowserPrompt.createRequestIntent(context)) },
                 onExportBackup = { backupExportLauncher.launch("soul-browser-backup.json") },
                 onImportBackup = { backupImportLauncher.launch(arrayOf("application/json", "text/*")) },
+                onPinWebsite = { activeTab?.let { PwaShortcutCreator.pinWebsiteToHome(context, it.title, it.url) } },
                 onDismiss = { showMoreMenu = false }
             )
         }
@@ -1200,11 +1211,7 @@ private fun SoulApp(
                                         .padding(horizontal = 8.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        Icons.Default.Language,
-                                        null,
-                                        tint = if (isCurrent) Lavender else Muted
-                                    )
+                                    FaviconAvatar(tab.url, size = 24.dp, fallbackColor = if (isCurrent) Lavender else Muted)
                                     Spacer(Modifier.width(10.dp))
                                     Text(
                                         tab.title.ifBlank { tab.url.ifBlank { "New Tab" } },
