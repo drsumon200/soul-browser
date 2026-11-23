@@ -220,6 +220,7 @@ private fun SoulApp(
     var activeTabId by browserViewModel.activeTabIdState
 
     var showDevTools by remember { mutableStateOf(false) }
+    var showSessionHistory by remember { mutableStateOf(false) }
     var swipePreviewTitle by remember { mutableStateOf<String?>(null) }
     val windowClass = rememberBrowserWindowClass()
     var showBackupMessage by remember { mutableStateOf<String?>(null) }
@@ -1141,6 +1142,7 @@ private fun SoulApp(
                 onShare = { activeTab?.let { BrowserActions.shareUrl(context, it.url, it.title) } },
                 onCopyUrl = { activeTab?.let { BrowserActions.copyToClipboard(context, it.url) } },
                 onOpenHistory = { history = HistoryStore.load(context); showHistory = true },
+                onOpenTabHistory = { history = HistoryStore.load(context); showSessionHistory = true },
                 onOpenSettings = { showSettings = true },
                 onOpenDevTools = { showDevTools = true },
                 onRequestDefaultBrowser = { activity.startActivity(DefaultBrowserPrompt.createRequestIntent(context)) },
@@ -1158,6 +1160,16 @@ private fun SoulApp(
                 onDeleteEntry = { history = HistoryStore.remove(context, it) },
                 onClearAll = { history = HistoryStore.clear(context) },
                 onDismiss = { showHistory = false }
+            )
+        }
+
+        if (showSessionHistory) {
+            val currentHost = activeTab?.url?.let(::extractDisplayHost).orEmpty()
+            val siteTrail = history.filter { extractDisplayHost(it.url) == currentHost }.take(30)
+            SessionBackHistorySheet(
+                trail = siteTrail,
+                onJumpToUrl = { navigateTo(it) },
+                onDismiss = { showSessionHistory = false }
             )
         }
 
