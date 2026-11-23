@@ -61,6 +61,7 @@ fun BrowserMoreMenuDialog(
     onRequestDefaultBrowser: () -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
+    onPinWebsite: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -80,6 +81,7 @@ fun BrowserMoreMenuDialog(
                 MenuRow(Icons.Default.DesktopWindows, "Set as default browser", true) { onRequestDefaultBrowser(); onDismiss() }
                 MenuRow(Icons.Default.Share, "Export backup", true) { onExportBackup(); onDismiss() }
                 MenuRow(Icons.Default.ContentCopy, "Import backup", true) { onImportBackup(); onDismiss() }
+                MenuRow(Icons.Default.Share, "Add website to home screen", hasActivePage) { onPinWebsite(); onDismiss() }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
