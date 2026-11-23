@@ -1,0 +1,5 @@
+package com.soulbrowser.app
+import android.content.Context
+import org.json.JSONObject
+data class SiteShieldPolicy(val host:String,val trackingProtection:Boolean=true,val desktopMode:Boolean=false,val forceDarkMode:Boolean=false,val allowAutoplay:Boolean=false)
+object PerSiteShieldStore { private const val PREFS="soul_site_shields";fun load(c:Context,host:String):SiteShieldPolicy{val h=host.lowercase();val raw=c.getSharedPreferences(PREFS,0).getString(h,null)?:return SiteShieldPolicy(h);return runCatching{val o=JSONObject(raw);SiteShieldPolicy(h,o.optBoolean("etp",true),o.optBoolean("desktop",false),o.optBoolean("dark",false),o.optBoolean("autoplay",false))}.getOrDefault(SiteShieldPolicy(h))};fun save(c:Context,p:SiteShieldPolicy){val j=JSONObject().put("etp",p.trackingProtection).put("desktop",p.desktopMode).put("dark",p.forceDarkMode).put("autoplay",p.allowAutoplay).toString();c.getSharedPreferences(PREFS,0).edit().putString(p.host.lowercase(),j).apply()} }
