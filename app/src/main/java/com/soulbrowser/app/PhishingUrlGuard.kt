@@ -1,0 +1,4 @@
+package com.soulbrowser.app
+import java.net.URI
+data class UrlThreatReport(val isSuspicious:Boolean,val reason:String?)
+object PhishingUrlGuard { private val tlds=setOf("zip","mov","tk","ml","ga","cf","gq");fun inspect(url:String):UrlThreatReport{val u=runCatching{URI(url)}.getOrNull()?:return UrlThreatReport(false,null);val h=u.host?.lowercase()?:return UrlThreatReport(false,null);if(!u.userInfo.isNullOrBlank())return UrlThreatReport(true,"URL contains embedded credentials.");if("xn--" in h)return UrlThreatReport(true,"Punycode domain detected: "+h);val t=h.substringAfterLast('.',"");if(t in tlds&&h.count{it=='-'}>=2)return UrlThreatReport(true,"Unusual domain pattern.");if(h.any{it.code>127}&&h.any{it in 'a'..'z'})return UrlThreatReport(true,"Mixed Unicode and ASCII characters.");return UrlThreatReport(false,null)} }
