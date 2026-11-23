@@ -1,0 +1,4 @@
+package com.soulbrowser.app
+import androidx.compose.ui.graphics.Color
+data class WorkspaceThemePreset(val id:String,val name:String,val accent:Color,val glow:Color)
+object WorkspaceColorPalette { val presets=listOf(WorkspaceThemePreset("lavender","Zen Lavender",Color(0xFFA7B5FF),Color(0x22A7B5FF)),WorkspaceThemePreset("mint","Nordic Mint",Color(0xFF8BD5CA),Color(0x228BD5CA)),WorkspaceThemePreset("amber","Warm Amber",Color(0xFFFFB86B),Color(0x22FFB86B)),WorkspaceThemePreset("rose","Rose Quartz",Color(0xFFED8796),Color(0x22ED8796)),WorkspaceThemePreset("sky","Arctic Sky",Color(0xFF89DCEB),Color(0x2289DCEB)),WorkspaceThemePreset("violet","Electric Violet",Color(0xFFC6A0F6),Color(0x22C6A0F6)));fun forWorkspaceIndex(index:Int)=presets[index.coerceAtLeast(0)%presets.size] }
