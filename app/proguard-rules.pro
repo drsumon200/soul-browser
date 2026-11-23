@@ -1,7 +1,11 @@
 # Keep GeckoView classes and JNI/native entry points intact.
--keep class org.mozilla.geckoview.** { *; }
--keep interface org.mozilla.geckoview.** { *; }
--dontwarn org.mozilla.geckoview.**
+-keep class org.mozilla.** { *; }
+-keep interface org.mozilla.** { *; }
+-dontwarn org.mozilla.**
+
+# Keep Soul Browser application classes, Compose entry points, and data models
+-keep class com.soulbrowser.app.** { *; }
+-keep interface com.soulbrowser.app.** { *; }
 
 # Preserve coroutine service-provider names and debug-relevant volatile state.
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory

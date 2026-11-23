@@ -65,6 +65,9 @@ fun BrowserMoreMenuDialog(
     onShare: () -> Unit,
     onCopyUrl: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenBookmarks: () -> Unit = {},
+    onOpenWorkspaces: () -> Unit = {},
+    onOpenContainers: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenReadingList: () -> Unit,
@@ -81,13 +84,17 @@ fun BrowserMoreMenuDialog(
         containerColor = DialogPanel,
         title = { Text("Browser menu", color = DialogText, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) },
         text = {
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 440.dp)) {
                 item {
+                    MenuRow(Icons.Default.Bookmark, "Bookmarks", true) { onOpenBookmarks(); onDismiss() }
+                    MenuRow(Icons.Default.History, "History", true) { onOpenHistory(); onDismiss() }
+                    MenuRow(Icons.Default.Download, "Downloads", true) { onOpenDownloads(); onDismiss() }
+                    MenuRow(Icons.Default.MenuBook, "Reading list", true) { onOpenReadingList(); onDismiss() }
+                    MenuRow(Icons.Default.Workspaces, "Workspaces", true) { onOpenWorkspaces(); onDismiss() }
+                    MenuRow(Icons.Default.Layers, "Containers", true) { onOpenContainers(); onDismiss() }
                     MenuRow(Icons.Default.Shield, "Privacy shield & stats", true) { onOpenPrivacyShield(); onDismiss() }
                     MenuRow(Icons.Default.AutoStories, "Reader mode", hasActivePage) { onReaderMode(); onDismiss() }
                     MenuRow(Icons.Default.VerticalSplit, "Split screen view", hasActivePage) { onSplitScreen(); onDismiss() }
-                    MenuRow(Icons.Default.Download, "Downloads", true) { onOpenDownloads(); onDismiss() }
-                    MenuRow(Icons.Default.MenuBook, "Reading list", true) { onOpenReadingList(); onDismiss() }
                     MenuRow(Icons.Default.QrCode, "Share visual QR card", hasActivePage) { onOpenShareCard(); onDismiss() }
                     MenuRow(Icons.Default.SaveAlt, "Save page offline", hasActivePage) { onSaveOffline(); onDismiss() }
                     MenuRow(Icons.Default.Code, "View page source", hasActivePage) { onViewSource(); onDismiss() }
@@ -96,12 +103,11 @@ fun BrowserMoreMenuDialog(
                     MenuRow(Icons.Default.Search, "Find in page", hasActivePage) { onFindInPage(); onDismiss() }
                     MenuRow(Icons.Default.Share, "Share page", hasActivePage) { onShare(); onDismiss() }
                     MenuRow(Icons.Default.ContentCopy, "Copy link", hasActivePage) { onCopyUrl(); onDismiss() }
-                    MenuRow(Icons.Default.History, "History", true) { onOpenHistory(); onDismiss() }
                     MenuRow(Icons.Default.Settings, "Settings", true) { onOpenSettings(); onDismiss() }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = DialogAccent) } }
     )
 }
 

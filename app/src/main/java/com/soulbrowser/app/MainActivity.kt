@@ -950,114 +950,61 @@ private fun SoulApp(
                     .padding(padding)
                     .background(Ink)
             ) {
-                if (!isFullscreen && !settings.compactMode) {
-                    // Zen compact top island & Workspace switcher
+                if (!isFullscreen) {
+                    // Unified Top Address Bar (Zen standard)
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                            .shadow(2.dp, RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Panel)
+                            .border(1.dp, SoulColors.Border, RoundedCornerShape(20.dp))
+                            .padding(horizontal = 10.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            Modifier
-                                .size(34.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Lavender),
-                            contentAlignment = Alignment.Center
+                        // Privacy & Security Shield Icon
+                        IconButton(
+                            onClick = { showPrivacyShield = true },
+                            modifier = Modifier.size(32.dp)
                         ) {
-                            Text("S", color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp)
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Soul Browser", color = SoulColors.Text, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                            Text(activeWorkspace.name, color = Muted, fontSize = 11.sp)
-                        }
-                        // Privacy shield button with live counter badge
-                        IconButton(onClick = { showPrivacyShield = true }) {
                             Box(contentAlignment = Alignment.TopEnd) {
-                                Icon(
-                                    Icons.Default.Shield,
-                                    "Privacy Shield",
-                                    tint = if (settings.trackingProtection) SoulColors.Mint else Muted
-                                )
+                                if (activeTab?.let { isHttpsUrl(it.url) } == true) {
+                                    Icon(
+                                        Icons.Default.Lock,
+                                        contentDescription = "HTTPS connection",
+                                        tint = if (secureByTabId[activeTab.id] == true) SoulColors.Mint else Lavender,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.Shield,
+                                        contentDescription = "Privacy Shield",
+                                        tint = if (settings.trackingProtection) Lavender else Muted,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                }
                                 val blockedCount = AdblockFilterEngine.totalBlocked()
                                 if (blockedCount > 0) {
                                     Box(
                                         Modifier
-                                            .size(13.dp)
+                                            .size(10.dp)
                                             .clip(CircleShape)
-                                            .background(SoulColors.Rose),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = if (blockedCount > 99) "9+" else "$blockedCount",
-                                            color = Color.White,
-                                            fontSize = 7.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
+                                            .background(SoulColors.Rose)
+                                    )
                                 }
                             }
                         }
-                        IconButton(onClick = { showSpaces = true }) {
-                            Icon(Icons.Default.Workspaces, "Workspaces", tint = Lavender)
-                        }
-                        IconButton(onClick = { showContainers = true }) {
-                            Icon(Icons.Default.Layers, "Containers", tint = Lavender)
-                        }
-                        IconButton(onClick = { showVisualTabs = true }) {
-                            Box(
-                                Modifier
-                                    .size(24.dp)
-                                    .border(1.5.dp, SoulColors.Text, RoundedCornerShape(6.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (workspaceTabCount > 99) "99+" else "$workspaceTabCount",
-                                    color = SoulColors.Text,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
 
-                if (!isFullscreen) {
-                    // Floating Omnibox with security indicator and smart quick actions
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
-                            .shadow(2.dp, RoundedCornerShape(18.dp))
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(Panel)
-                            .border(1.dp, SoulColors.Border, RoundedCornerShape(18.dp))
-                            .padding(horizontal = 10.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (activeTab?.let { isHttpsUrl(it.url) } == true) {
-                            Icon(
-                                Icons.Default.Lock,
-                                contentDescription = "HTTPS connection",
-                                tint = if (secureByTabId[activeTab.id] == true) SoulColors.Mint else Muted,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        } else {
-                            Box(
-                                Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(activeContainer.color))
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(6.dp))
+
+                        // Address / Search Input Field
                         BasicTextField(
                             value = address,
                             onValueChange = { address = it },
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(vertical = 11.dp)
+                                .padding(vertical = 10.dp)
                                 .onFocusChanged { isAddressFocused = it.isFocused },
                             singleLine = true,
                             cursorBrush = SolidColor(Lavender),
@@ -1078,52 +1025,86 @@ private fun SoulApp(
                         val isBookmarked = activeTab != null && bookmarks.any { it.url == activeTab.url }
 
                         if (isAddressFocused && address.isNotEmpty()) {
-                            IconButton(onClick = { address = "" }) {
+                            IconButton(
+                                onClick = { address = "" },
+                                modifier = Modifier.size(32.dp)
+                            ) {
                                 Icon(Icons.Default.Clear, "Clear", tint = Muted, modifier = Modifier.size(16.dp))
                             }
+                            IconButton(
+                                onClick = { submitAddress() },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowForward, "Go", tint = Lavender, modifier = Modifier.size(18.dp))
+                            }
                         } else {
-                            IconButton(onClick = { qrScannerLauncher.launch(Unit) }) {
-                                Icon(Icons.Default.QrCodeScanner, "Scan QR code", tint = Muted, modifier = Modifier.size(18.dp))
-                            }
-                            IconButton(onClick = { voiceSearchLauncher.launch(Unit) }) {
-                                Icon(Icons.Default.Mic, "Voice search", tint = Muted, modifier = Modifier.size(18.dp))
-                            }
-                        }
+                            if (activeTab != null && activeTab.url != "about:blank" && isHttpUrl(activeTab.url)) {
+                                IconButton(
+                                    enabled = !privatePage,
+                                    onClick = {
+                                        val current = activeTab
+                                        if (current != null && !privatePage && isHttpUrl(current.url)) {
+                                            val existing = bookmarks.any { it.url == current.url }
+                                            bookmarks = if (existing) {
+                                                bookmarks.filterNot { it.url == current.url }
+                                            } else {
+                                                bookmarks + BrowserBookmark(
+                                                    url = current.url,
+                                                    title = current.title.ifBlank { current.url }
+                                                )
+                                            }
+                                            SoulStore.saveBookmarks(context, bookmarks)
+                                            HapticFeedbackEngine.tick(activeGeckoView)
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Star,
+                                        contentDescription = "Bookmark",
+                                        tint = when {
+                                            privatePage -> Muted.copy(alpha = 0.35f)
+                                            isBookmarked -> Lavender
+                                            else -> Muted
+                                        },
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
 
-                        IconButton(
-                            enabled = activeTab != null && !privatePage && isHttpUrl(activeTab.url),
-                            onClick = {
-                                val current = activeTab
-                                if (current != null && !privatePage && isHttpUrl(current.url)) {
-                                    val existing = bookmarks.any { it.url == current.url }
-                                    bookmarks = if (existing) {
-                                        bookmarks.filterNot { it.url == current.url }
-                                    } else {
-                                        bookmarks + BrowserBookmark(
-                                            url = current.url,
-                                            title = current.title.ifBlank { current.url }
-                                        )
-                                    }
-                                    SoulStore.saveBookmarks(context, bookmarks)
-                                    HapticFeedbackEngine.tick(activeGeckoView)
+                                IconButton(
+                                    onClick = {
+                                        if (activeTab.isLoading) {
+                                            activeTab.session?.stop()
+                                        } else {
+                                            activeTab.session?.reload()
+                                        }
+                                        HapticFeedbackEngine.tick(activeGeckoView)
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        if (activeTab.isLoading) Icons.Default.Close else Icons.Default.Refresh,
+                                        contentDescription = if (activeTab.isLoading) "Stop" else "Reload",
+                                        tint = SoulColors.Text,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = { qrScannerLauncher.launch(Unit) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(Icons.Default.QrCodeScanner, "Scan QR code", tint = Muted, modifier = Modifier.size(18.dp))
+                                }
+                                IconButton(
+                                    onClick = { voiceSearchLauncher.launch(Unit) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(Icons.Default.Mic, "Voice search", tint = Muted, modifier = Modifier.size(18.dp))
                                 }
                             }
-                        ) {
-                            Icon(
-                                Icons.Default.Star,
-                                contentDescription = "Bookmark",
-                                tint = when {
-                                    privatePage -> Muted.copy(alpha = 0.35f)
-                                    isBookmarked -> Lavender
-                                    else -> Muted
-                                },
-                                modifier = Modifier.size(18.dp)
-                            )
                         }
-
-                        IconButton(onClick = { submitAddress() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, "Go", tint = Lavender, modifier = Modifier.size(18.dp))
-                        }
+                    }
                     }
 
                     // Omnibox Smart Helpers (Inline Calculator, Bang Hints, Suggestions)
@@ -1321,64 +1302,6 @@ private fun SoulApp(
                                 }
                             }
 
-                            // Floating Quick Action Dock
-                            if (!isFullscreen && activeTab != null && activeSession != null && activeTab.url != "about:blank" && !splitViewState.isEnabled && activeArticle == null) {
-                                Box(
-                                    Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .padding(end = 16.dp, bottom = 10.dp)
-                                ) {
-                                    FloatingQuickActionBar(
-                                        onReaderMode = {
-                                            coroutineScope.launch {
-                                                val article = ReaderModeExtractor.fetchAndExtract(activeTab.url)
-                                                if (article != null) {
-                                                    activeArticle = article
-                                                } else {
-                                                    Toast.makeText(context, "Reader view not available for this page", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
-                                        },
-                                        onTranslate = {
-                                            navigateTo(PageTranslateHelper.buildTranslatedUrl(activeTab.url))
-                                        },
-                                        onScreenshot = {
-                                            FullPageScreenshotter.captureAndSave(context, activeGeckoView)
-                                        },
-                                        onNewTab = {
-                                            createTab()
-                                        }
-                                    )
-                                }
-                            }
-
-                            // Quick Tab Switcher Pill
-                            if (!isFullscreen && previousTab != null && !isAddressFocused && !splitViewState.isEnabled) {
-                                Box(
-                                    Modifier
-                                        .align(Alignment.BottomStart)
-                                        .padding(start = 16.dp, bottom = 10.dp)
-                                ) {
-                                    QuickTabSwitcherPill(
-                                        previousTab = previousTab,
-                                        onSwitch = { prev ->
-                                            val prevContainer = containers.firstOrNull { it.id == prev.containerId } ?: activeContainer
-                                            if (prevContainer.isPrivate && activeContainer.id != prevContainer.id) {
-                                                requestPrivateAccess {
-                                                    previousActiveTabId = activeTabId
-                                                    activeTabId = prev.id
-                                                    activeContainer = prevContainer
-                                                }
-                                            } else {
-                                                previousActiveTabId = activeTabId
-                                                activeTabId = prev.id
-                                                activeContainer = prevContainer
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-
                             // Floating TTS Player
                             if (isTtsPlaying) {
                                 Box(
@@ -1418,53 +1341,23 @@ private fun SoulApp(
                 }
 
                 if (!isFullscreen) {
-                    // Floating Zen Bottom Bar with Horizontal Swipe for Workspace Switch
+                    // Standard 5-Button Bottom Navigation Bar (Back | Forward | Home | Tabs [N] | Menu)
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 18.dp, vertical = 8.dp)
-                            .shadow(8.dp, RoundedCornerShape(22.dp))
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .shadow(6.dp, RoundedCornerShape(22.dp))
                             .clip(RoundedCornerShape(22.dp))
                             .background(Panel)
                             .border(1.dp, SoulColors.Border, RoundedCornerShape(22.dp))
-                            .pointerInput(workspaces, activeWorkspace.id) {
-                                var dragX = 0f
-                                var dragY = 0f
-                                detectDragGestures(
-                                    onDragEnd = {
-                                        if (abs(dragX) > 48f && abs(dragX) > abs(dragY)) {
-                                            val currentIndex = workspaces.indexOfFirst {
-                                                it.id == activeWorkspace.id
-                                            }
-                                            val nextIndex = currentIndex + if (dragX < 0) 1 else -1
-                                            if (nextIndex in workspaces.indices) {
-                                                switchWorkspace(workspaces[nextIndex])
-                                                HapticFeedbackEngine.confirm(activeGeckoView)
-                                            }
-                                        } else if (dragY < -48f) {
-                                            showVisualTabs = true
-                                            HapticFeedbackEngine.tick(activeGeckoView)
-                                        }
-                                        dragX = 0f
-                                        dragY = 0f
-                                    },
-                                    onDragCancel = {
-                                        dragX = 0f
-                                        dragY = 0f
-                                    },
-                                    onDrag = { change, amount ->
-                                        dragX += amount.x
-                                        dragY += amount.y
-                                        change.consume()
-                                    }
-                                )
-                            }
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceAround
                     ) {
                         val canBack = activeTab?.canGoBack == true
                         val canForward = activeTab?.canGoForward == true
+
+                        // 1. Back Button
                         IconButton(
                             onClick = {
                                 activeTab?.session?.goBack()
@@ -1478,6 +1371,8 @@ private fun SoulApp(
                                 tint = if (canBack) SoulColors.Text else Muted.copy(alpha = 0.35f)
                             )
                         }
+
+                        // 2. Forward Button
                         IconButton(
                             onClick = {
                                 activeTab?.session?.goForward()
@@ -1491,39 +1386,51 @@ private fun SoulApp(
                                 tint = if (canForward) SoulColors.Text else Muted.copy(alpha = 0.35f)
                             )
                         }
+
+                        // 3. Home / New Tab Button
                         IconButton(
                             onClick = {
-                                if (activeTab?.isLoading == true) {
-                                    activeTab.session?.stop()
+                                if (activeTab != null && activeTab.url != "about:blank") {
+                                    createTab()
                                 } else {
-                                    activeTab?.session?.reload()
+                                    createTab()
                                 }
                                 HapticFeedbackEngine.tick(activeGeckoView)
-                            },
-                            enabled = activeTab?.session != null
+                            }
                         ) {
-                            Icon(
-                                if (activeTab?.isLoading == true) Icons.Default.Close else Icons.Default.Refresh,
-                                if (activeTab?.isLoading == true) "Stop" else "Reload",
-                                tint = if (activeTab?.session != null) SoulColors.Text else Muted.copy(alpha = 0.35f)
-                            )
+                            Icon(Icons.Default.Home, "Home", tint = Lavender)
                         }
-                        IconButton(onClick = {
-                            createTab()
-                            HapticFeedbackEngine.tick(activeGeckoView)
-                        }) {
-                            Icon(Icons.Default.Add, "New tab", tint = Lavender)
+
+                        // 4. Tabs Overview Counter Button
+                        IconButton(
+                            onClick = {
+                                showVisualTabs = true
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            }
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(24.dp)
+                                    .border(1.5.dp, SoulColors.Text, RoundedCornerShape(6.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (workspaceTabCount > 99) "99+" else "$workspaceTabCount",
+                                    color = SoulColors.Text,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
-                        IconButton(onClick = { showMoreMenu = true }) {
-                            Icon(Icons.Default.MoreVert, "More options", tint = SoulColors.Text)
-                        }
-                        IconButton(onClick = {
-                            showVisualTabs = true
-                            HapticFeedbackEngine.tick(activeGeckoView)
-                        }) {
-                            Icon(Icons.Default.GridView, "Tab overview", tint = SoulColors.Text)
+
+                        // 5. Menu Button
+                        IconButton(
+                            onClick = { showMoreMenu = true }
+                        ) {
+                            Icon(Icons.Default.MoreVert, "Menu", tint = SoulColors.Text)
                         }
                     }
+                }
                 }
             }
         }
@@ -1676,6 +1583,9 @@ private fun SoulApp(
         // Browser More Options Menu
         if (showMoreMenu) {
             BrowserMoreMenuDialog(
+                onOpenBookmarks = { showBookmarks = true },
+                onOpenWorkspaces = { showSpaces = true },
+                onOpenContainers = { showContainers = true },
                 isDesktopMode = BrowserActions.isDesktopMode(activeTab?.session),
                 isCompactMode = settings.compactMode,
                 hasActivePage = activeTab != null && activeTab.url != "about:blank",

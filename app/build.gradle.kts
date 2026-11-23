@@ -8,17 +8,17 @@ plugins {
 
 android {
     namespace = "com.soulbrowser.app"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.soulbrowser.app"
         minSdk = 26
-        targetSdk = 36
-        versionCode = 6
-        versionName = "0.6.0-alpha"
+        targetSdk = 35
+        versionCode = 7
+        versionName = "0.7.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // The current target device is Honor 200 (64-bit ARM).
+        // Target 64-bit ARM (Honor 200 / MagicOS 10)
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
@@ -28,18 +28,12 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            // Keep the debug build small with R8 shrinking, but keep stack traces readable.
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-                "proguard-debug.pro"
-            )
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
