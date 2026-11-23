@@ -41,6 +41,16 @@ class BrowserUrlTest {
         assertEquals("", extractDisplayHost("about:blank"))
     }
 
+    @Test fun httpSchemesAreMatchedExactly() {
+        assertTrue(isHttpUrl("http://example.com"))
+        assertTrue(isHttpUrl("https://example.com/path"))
+        assertFalse(isHttpUrl("httpx://example.com"))
+        assertFalse(isHttpUrl("mailto:test@example.com"))
+        assertFalse(isHttpUrl("http:example.com"))
+        assertTrue(isHttpsUrl("https://example.com"))
+        assertFalse(isHttpsUrl("http://example.com"))
+    }
+
     @Test fun externalSchemesAreDetected() {
         assertTrue(isExternalAppUri("mailto:test@example.com"))
         assertTrue(isExternalAppUri("tel:+8801700000000"))
