@@ -22,8 +22,9 @@ data class BrowserSettings(
     val blockAudibleAutoplay: Boolean = true,
     val trackingProtection: Boolean = true,
     val reachabilityEnabled: Boolean = false,
-    val edgeGesturesEnabled: Boolean = true,
-    val dohProvider: DohProvider = DohProvider.SYSTEM
+    val edgeGesturesEnabled: Boolean = false,
+    val dohProvider: DohProvider = DohProvider.SYSTEM,
+    val isDarkMode: Boolean = true
 )
 
 object BrowserSettingsStore {
@@ -36,6 +37,7 @@ object BrowserSettingsStore {
     private const val KEY_REACHABILITY = "reachability_enabled"
     private const val KEY_EDGE_GESTURES = "edge_gestures_enabled"
     private const val KEY_DOH = "doh_provider"
+    private const val KEY_DARK_MODE = "is_dark_mode"
 
     fun load(context: Context): BrowserSettings {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -46,8 +48,9 @@ object BrowserSettingsStore {
             blockAudibleAutoplay = prefs.getBoolean(KEY_AUTOPLAY, true),
             trackingProtection = prefs.getBoolean(KEY_TRACKING, true),
             reachabilityEnabled = prefs.getBoolean(KEY_REACHABILITY, false),
-            edgeGesturesEnabled = prefs.getBoolean(KEY_EDGE_GESTURES, true),
-            dohProvider = DohProvider.fromName(prefs.getString(KEY_DOH, null))
+            edgeGesturesEnabled = prefs.getBoolean(KEY_EDGE_GESTURES, false),
+            dohProvider = DohProvider.fromName(prefs.getString(KEY_DOH, null)),
+            isDarkMode = prefs.getBoolean(KEY_DARK_MODE, true)
         )
     }
 
@@ -61,6 +64,7 @@ object BrowserSettingsStore {
             .putBoolean(KEY_REACHABILITY, settings.reachabilityEnabled)
             .putBoolean(KEY_EDGE_GESTURES, settings.edgeGesturesEnabled)
             .putString(KEY_DOH, settings.dohProvider.name)
+            .putBoolean(KEY_DARK_MODE, settings.isDarkMode)
             .apply()
     }
 }

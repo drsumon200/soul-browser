@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -26,17 +27,36 @@ fun VisualTabGridSheet(
     activeTabId: String?,
     onSelectTab: (SoulTab) -> Unit,
     onCloseTab: (SoulTab) -> Unit,
+    onNewTab: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = SoulColors.Ink) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp).padding(bottom = 24.dp)) {
-            Text(
-                "Open Tabs (${tabs.size})",
-                color = SoulColors.Text,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 12.dp, start = 4.dp)
-            )
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 12.dp, start = 4.dp, end = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Open Tabs (${tabs.size})",
+                    color = SoulColors.Text,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Button(
+                    onClick = {
+                        onNewTab()
+                        onDismiss()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SoulColors.Lavender),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("New Tab", color = androidx.compose.ui.graphics.Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+            }
             LazyVerticalGrid(
                 GridCells.Fixed(2),
                 Modifier.fillMaxWidth().heightIn(max = 460.dp),

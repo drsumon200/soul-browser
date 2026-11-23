@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Close
@@ -104,6 +106,7 @@ fun BrowserMoreMenuDialog(
                     MenuRow(Icons.Default.Search, "Find in page", hasActivePage) { onFindInPage(); onDismiss() }
                     MenuRow(Icons.Default.Share, "Share page", hasActivePage) { onShare(); onDismiss() }
                     MenuRow(Icons.Default.ContentCopy, "Copy link", hasActivePage) { onCopyUrl(); onDismiss() }
+                    MenuRow(if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode, if (isDarkMode) "Switch to light theme" else "Switch to dark purple theme", true) { onToggleDarkMode(); onDismiss() }
                     MenuRow(Icons.Default.Settings, "Settings", true) { onOpenSettings(); onDismiss() }
                 }
             }
@@ -207,6 +210,9 @@ fun BrowserSettingsDialog(
                 }
                 item {
                     Spacer(Modifier.height(10.dp))
+                    SettingsToggleRow("Dark Purple Theme", "Toggle between Dark Cosmic Purple and Light Zen theme", settings.isDarkMode) {
+                        onUpdate(settings.copy(isDarkMode = it))
+                    }
                     SettingsToggleRow("Zen compact mode", "Hide top title bar while browsing", settings.compactMode) {
                         onUpdate(settings.copy(compactMode = it))
                     }

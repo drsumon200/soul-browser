@@ -184,6 +184,7 @@ private fun SoulApp(
     var activeTabId by browserViewModel.activeTabIdState
 
     var settings by remember { mutableStateOf(BrowserSettingsStore.load(context)) }
+    SoulColors.isDark = settings.isDarkMode
     var history by remember { mutableStateOf(HistoryStore.load(context)) }
     var speedDials by remember { mutableStateOf(SoulStore.loadSpeedDials(context)) }
     var downloadRecords by remember { mutableStateOf(DownloadHistoryStore.load(context)) }
@@ -1268,21 +1269,8 @@ private fun SoulApp(
                     }
                 }
 
-                // Main Content Viewport with Reachability & Edge Gestures
-                OneHandedReachContainer(enabled = settings.reachabilityEnabled) {
-                    EdgeSwipeNavigationOverlay(
-                        canGoBack = settings.edgeGesturesEnabled && activeTab?.canGoBack == true,
-                        canGoForward = settings.edgeGesturesEnabled && activeTab?.canGoForward == true,
-                        onGoBack = {
-                            activeTab?.session?.goBack()
-                            HapticFeedbackEngine.tick(activeGeckoView)
-                        },
-                        onGoForward = {
-                            activeTab?.session?.goForward()
-                            HapticFeedbackEngine.tick(activeGeckoView)
-                        }
-                    ) {
-                        Box(Modifier.fillMaxSize()) {
+                // Main Content Viewport - Unrestricted Touch & Fling Delivery
+                Box(Modifier.fillMaxSize().weight(1f)) {
                             val activeSession = activeTab?.session
 
                             if (activeArticle != null) {
@@ -1347,7 +1335,7 @@ private fun SoulApp(
                                         factory = { viewContext ->
                                             GeckoView(viewContext).apply {
                                                 activeGeckoView = this
-                                                coverUntilFirstPaint(0xFF140D26.toInt())
+                                                coverUntilFirstPaint(if (settings.isDarkMode) 0xFF140D26.toInt() else 0xFFF8FAFC.toInt())
                                                 setSession(activeSession)
                                             }
                                         },
@@ -1355,7 +1343,7 @@ private fun SoulApp(
                                             activeGeckoView = geckoView
                                             if (geckoView.session !== activeSession) {
                                                 geckoView.releaseSession()
-                                                geckoView.coverUntilFirstPaint(0xFF140D26.toInt())
+                                                geckoView.coverUntilFirstPaint(if (settings.isDarkMode) 0xFF140D26.toInt() else 0xFFF8FAFC.toInt())
                                                 geckoView.setSession(activeSession)
                                             }
                                         },
@@ -1398,7 +1386,6 @@ private fun SoulApp(
                                 }
                             }
                         }
-                    }
                 }
 
                 if (showFindBar) {
@@ -1409,52 +1396,53 @@ private fun SoulApp(
                 }
 
                 if (!isFullscreen) {
-                    // Transparent Bottom Navigation Bar (Back | Forward | Container | Home | Workspace | Bookmarks)
+                    // Transparent Bottom Navigation Bar (Back | Forward | Containers | Home | Workspaces | Tabs [N] | New Tab (+))
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
                             .shadow(0.dp)
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(Color(0xD91F1538)) // Frosted translucent dark purple
-                            .border(1.dp, Color(0x40A855F7), RoundedCornerShape(22.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(SoulColors.NavBarBg)
+                            .border(1.dp, if (settings.isDarkMode) Color(0x40A855F7) else Color(0x40CBD5E1), RoundedCornerShape(24.dp))
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceAround
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        val canBack = activeTab?.canGoBack == true
-                        val canForward = activeTab?.canGoForward == true
-
-                        // 1. Back
+                        // 1. Back Button
                         IconButton(
                             onClick = {
-                                activeTab?.session?.goBack()
+                                if (activeTab?.session != null && activeTab.canGoBack) {
+                                    activeTab.session.goBack()
+                                } else if (activeTab != null && activeTab.url != "about:blank") {
+                                    address = ""
+                                    navigateTo("about:blank")
+                                }
                                 HapticFeedbackEngine.tick(activeGeckoView)
                             },
-                            enabled = canBack,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 "Back",
-                                tint = if (canBack) SoulColors.Text else Muted.copy(alpha = 0.35f),
+                                tint = if (activeTab?.canGoBack == true || (activeTab != null && activeTab.url != "about:blank")) SoulColors.Text else SoulColors.Muted.copy(alpha = 0.4f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        // 2. Forward
+                        // 2. Forward Button
                         IconButton(
                             onClick = {
                                 activeTab?.session?.goForward()
                                 HapticFeedbackEngine.tick(activeGeckoView)
                             },
-                            enabled = canForward,
-                            modifier = Modifier.size(40.dp)
+                            enabled = activeTab?.canGoForward == true,
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowForward,
                                 "Forward",
-                                tint = if (canForward) SoulColors.Text else Muted.copy(alpha = 0.35f),
+                                tint = if (activeTab?.canGoForward == true) SoulColors.Text else SoulColors.Muted.copy(alpha = 0.4f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -1465,7 +1453,7 @@ private fun SoulApp(
                                 showContainers = true
                                 HapticFeedbackEngine.tick(activeGeckoView)
                             },
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
@@ -1484,18 +1472,22 @@ private fun SoulApp(
                             }
                         }
 
-                        // 4. Home Button (Center)
+                        // 4. Home Button
                         IconButton(
                             onClick = {
-                                createTab()
+                                if (activeTab != null && activeTab.url != "about:blank") {
+                                    createTab()
+                                } else {
+                                    createTab()
+                                }
                                 HapticFeedbackEngine.tick(activeGeckoView)
                             },
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 Icons.Default.Home,
                                 "Home",
-                                tint = Lavender,
+                                tint = SoulColors.Lavender,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -1506,7 +1498,7 @@ private fun SoulApp(
                                 showSpaces = true
                                 HapticFeedbackEngine.tick(activeGeckoView)
                             },
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 Icons.Default.Workspaces,
@@ -1516,19 +1508,42 @@ private fun SoulApp(
                             )
                         }
 
-                        // 6. Bookmarks
+                        // 6. Tabs Overview Counter Button
                         IconButton(
                             onClick = {
-                                showBookmarks = true
+                                showVisualTabs = true
                                 HapticFeedbackEngine.tick(activeGeckoView)
                             },
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(22.dp)
+                                    .border(1.5.dp, SoulColors.Text, RoundedCornerShape(5.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (workspaceTabCount > 99) "99+" else "$workspaceTabCount",
+                                    color = SoulColors.Text,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        // 7. Add New Tab Button (Always Present)
+                        IconButton(
+                            onClick = {
+                                createTab()
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
-                                Icons.Default.Bookmark,
-                                "Bookmarks",
-                                tint = SoulColors.TextSub,
-                                modifier = Modifier.size(20.dp)
+                                Icons.Default.Add,
+                                "Add new tab",
+                                tint = SoulColors.Lavender,
+                                modifier = Modifier.size(23.dp)
                             )
                         }
                     }
@@ -1573,6 +1588,7 @@ private fun SoulApp(
                         }
                     }
                 },
+                onNewTab = { createTab() },
                 onDismiss = { showVisualTabs = false }
             )
         }
@@ -1684,6 +1700,13 @@ private fun SoulApp(
         // Browser More Options Menu
         if (showMoreMenu) {
             BrowserMoreMenuDialog(
+                isDarkMode = settings.isDarkMode,
+                onToggleDarkMode = {
+                    val updated = settings.copy(isDarkMode = !settings.isDarkMode)
+                    settings = updated
+                    SoulColors.isDark = updated.isDarkMode
+                    BrowserSettingsStore.save(context, updated)
+                },
                 onOpenBookmarks = { showBookmarks = true },
                 onOpenWorkspaces = { showSpaces = true },
                 onOpenContainers = { showContainers = true },
@@ -2152,7 +2175,6 @@ private fun SoulApp(
                                 }
                             }
                         }
-                    }
                 },
                 confirmButton = {
                     TextButton(
