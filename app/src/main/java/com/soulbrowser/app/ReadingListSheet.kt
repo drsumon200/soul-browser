@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
@@ -18,6 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReadingListSheet(items: List<ReadingListItem>, onOpen: (ReadingListItem) -> Unit, onToggleRead: (ReadingListItem) -> Unit, onDelete: (ReadingListItem) -> Unit, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = SoulColors.Panel) {
