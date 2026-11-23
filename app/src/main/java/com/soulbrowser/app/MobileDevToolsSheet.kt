@@ -28,7 +28,6 @@ fun MobileDevToolsSheet(
     activeSessionCount: Int,
     onSelectUaProfile: (UserAgentProfile) -> Unit,
     onViewSource: () -> Unit,
-    onClearHostData: () -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = SoulColors.Panel) {
@@ -43,7 +42,6 @@ fun MobileDevToolsSheet(
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth()) {
                 TextButton(onClick = { onViewSource(); onDismiss() }) { Text("View Source") }
-                TextButton(onClick = { onClearHostData(); onDismiss() }) { Text("Clear Host Storage", color = SoulColors.Rose) }
             }
             UserAgentProfile.entries.forEach { profile ->
                 TextButton(onClick = { onSelectUaProfile(profile); onDismiss() }) {
