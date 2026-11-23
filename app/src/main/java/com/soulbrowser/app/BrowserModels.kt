@@ -60,6 +60,7 @@ object SoulStore {
     private const val WORKSPACES = "workspaces"
     private const val TABS = "tabs"
     private const val BOOKMARKS = "bookmarks"
+    private const val SPEED_DIALS = "speed_dials"
 
     private fun defaultContainers(): List<BrowserContainer> =
         listOf(BrowserContainer(id = "personal", name = "Personal", color = 0xFF9BA8FF))
@@ -171,6 +172,27 @@ object SoulStore {
                 BrowserBookmark(url = url, title = o.optString("title", url))
             }
         }.getOrDefault(emptyList())
+    }
+
+    fun loadSpeedDials(context: Context): List<SpeedDialItem> {
+        val raw = context.getSharedPreferences(PREFS, 0).getString(SPEED_DIALS, null)
+            ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(raw)
+            (0 until array.length()).map { i ->
+                val item = array.getJSONObject(i)
+                val url = item.getString("url")
+                SpeedDialItem(item.optString("title", url), url)
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    fun saveSpeedDials(context: Context, items: List<SpeedDialItem>) {
+        val array = JSONArray()
+        items.forEach { item ->
+            array.put(JSONObject().put("title", item.title).put("url", item.url))
+        }
+        context.getSharedPreferences(PREFS, 0).edit().putString(SPEED_DIALS, array.toString()).apply()
     }
 
     fun saveBookmarks(context: Context, items: List<BrowserBookmark>) {
