@@ -1,0 +1,3 @@
+package com.soulbrowser.app
+import org.json.*
+object ContainerCookieExporter { fun exportContainersJson(containers:List<BrowserContainer>):String{val a=JSONArray();containers.forEach{a.put(JSONObject().put("id",it.id).put("name",it.name).put("color",it.color).put("isPrivate",it.isPrivate))};return a.toString(2)};fun importContainersJson(raw:String):List<BrowserContainer> = runCatching{val a=JSONArray(raw);(0 until a.length()).mapNotNull{i->val o=a.optJSONObject(i)?:return@mapNotNull null;val id=o.optString("id");val name=o.optString("name");if(id.isBlank()||name.isBlank())null else BrowserContainer(id,name,o.optLong("color",0xFFA7B5FF),o.optBoolean("isPrivate",false))}}.getOrDefault(emptyList()) }
