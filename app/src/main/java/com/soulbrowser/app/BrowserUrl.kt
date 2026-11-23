@@ -65,3 +65,5 @@ internal fun isExternalAppUri(uri: String): Boolean {
     val scheme = uri.substringBefore(":", missingDelimiterValue = "").lowercase()
     return scheme in EXTERNAL_SCHEMES
 }
+
+internal fun isLikelyUrl(value: String): Boolean = isHttpUrl(value) || value.startsWith("www.", true) || (!value.any(Char::isWhitespace) && value.contains('.') && !value.startsWith('!'))
