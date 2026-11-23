@@ -1,0 +1,2 @@
+package com.soulbrowser.app
+object TabAutoArchiver { fun archiveStaleTabs(tabs:List<SoulTab>,activeTabId:String?,maxIdleHours:Int=24):Pair<List<SoulTab>,List<SoulTab>>{val cutoff=System.currentTimeMillis()-maxIdleHours.coerceAtLeast(1)*3600000L;val old=mutableListOf<SoulTab>();val kept=mutableListOf<SoulTab>();tabs.forEach{t->if(t.id!=activeTabId&&!t.isPinned&&t.lastAccessedAt<cutoff)old.add(t.copy(session=null,isHibernated=true))else kept.add(t)};return kept to old} }

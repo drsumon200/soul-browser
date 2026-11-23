@@ -1,0 +1,4 @@
+package com.soulbrowser.app
+import androidx.compose.runtime.Immutable
+@Immutable data class SplitViewState(val isEnabled:Boolean=false,val secondaryTabId:String?=null,val splitRatio:Float=0.5f,val focusedPane:Int=0)
+object SplitViewReducer { fun openSplit(id:String)=SplitViewState(true,id,0.5f,1);fun closeSplit()=SplitViewState();fun adjustRatio(s:SplitViewState,d:Float)=s.copy(splitRatio=(s.splitRatio+d).coerceIn(0.25f,0.75f));fun swapPanes(primary:String?,s:SplitViewState):Pair<String?,SplitViewState>{if(!s.isEnabled||s.secondaryTabId==null)return primary to s;return s.secondaryTabId to s.copy(secondaryTabId=primary)} }

@@ -1,0 +1,4 @@
+package com.soulbrowser.app
+import java.util.UUID
+data class TabGroup(val id:String=UUID.randomUUID().toString(),val workspaceId:String,val title:String,val colorHex:Long=0xFFA7B5FF,val isCollapsed:Boolean=false,val tabIds:List<String> = emptyList())
+object TabGroupManager { fun addTabToGroup(groups:List<TabGroup>,groupId:String,tabId:String)=groups.map{val ids=it.tabIds.filterNot{v->v==tabId};if(it.id==groupId)it.copy(tabIds=ids+tabId)else it.copy(tabIds=ids)};fun removeTabFromGroups(groups:List<TabGroup>,tabId:String)=groups.map{it.copy(tabIds=it.tabIds.filterNot{v->v==tabId})}.filter{it.tabIds.isNotEmpty()};fun toggleCollapse(groups:List<TabGroup>,groupId:String)=groups.map{if(it.id==groupId)it.copy(isCollapsed=!it.isCollapsed)else it} }

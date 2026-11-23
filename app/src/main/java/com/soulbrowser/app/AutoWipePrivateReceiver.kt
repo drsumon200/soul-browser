@@ -1,0 +1,4 @@
+package com.soulbrowser.app
+import android.content.*
+import android.os.Build
+class AutoWipePrivateReceiver(private val onWipePrivateTabs:()->Unit):BroadcastReceiver(){override fun onReceive(context:Context?,intent:Intent?){if(intent?.action==Intent.ACTION_SCREEN_OFF)onWipePrivateTabs()};companion object{fun register(context:Context,onWipe:()->Unit):AutoWipePrivateReceiver{val r=AutoWipePrivateReceiver(onWipe);val f=IntentFilter(Intent.ACTION_SCREEN_OFF);if(Build.VERSION.SDK_INT>=33)context.registerReceiver(r,f,Context.RECEIVER_NOT_EXPORTED)else @Suppress("DEPRECATION") context.registerReceiver(r,f);return r}}}
