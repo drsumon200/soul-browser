@@ -50,6 +50,17 @@ internal fun extractDisplayHost(url: String): String {
     }.getOrDefault(url)
 }
 
+internal fun isHttpUrl(url: String): Boolean {
+    val parsed = runCatching { URI(url) }.getOrNull() ?: return false
+    val scheme = parsed.scheme?.lowercase()
+    return scheme in setOf("http", "https") && !parsed.host.isNullOrBlank()
+}
+
+internal fun isHttpsUrl(url: String): Boolean {
+    if (!isHttpUrl(url)) return false
+    return runCatching { URI(url).scheme.equals("https", ignoreCase = true) }.getOrDefault(false)
+}
+
 internal fun isExternalAppUri(uri: String): Boolean {
     val scheme = uri.substringBefore(":", missingDelimiterValue = "").lowercase()
     return scheme in EXTERNAL_SCHEMES
