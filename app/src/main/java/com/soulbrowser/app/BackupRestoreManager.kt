@@ -6,19 +6,31 @@ import org.json.JSONObject
 
 object BackupRestoreManager {
     fun exportJson(context: Context): String {
-        val containers = SoulStore.loadContainers(context)
+        val containers = SoulStore.loadContainers(context).filterNot { it.isPrivate }
+        val safeContainers = containers.ifEmpty {
+            listOf(BrowserContainer(id = "personal", name = "Personal", color = 0xFF9BA8FF))
+        }
+        val containerIds = safeContainers.mapTo(mutableSetOf()) { it.id }
+        val workspaces = SoulStore.loadWorkspaces(context, safeContainers.first().id)
+            .filter { it.containerId in containerIds }
         val root = JSONObject().put("version", 2)
         root.put("bookmarks", JSONArray().apply {
-            SoulStore.loadBookmarks(context).forEach { put(JSONObject().put("url", it.url).put("title", it.title)) }
+            SoulStore.loadBookmarks(context).filter { isHttpUrl(it.url) }.forEach {
+                put(JSONObject().put("url", it.url).put("title", it.title))
+            }
         })
         root.put("speedDials", JSONArray().apply {
-            SoulStore.loadSpeedDials(context).forEach { put(JSONObject().put("title", it.title).put("url", it.url)) }
+            SoulStore.loadSpeedDials(context).filter { isHttpUrl(it.url) }.forEach {
+                put(JSONObject().put("title", it.title).put("url", it.url))
+            }
         })
         root.put("containers", JSONArray().apply {
-            containers.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("color", it.color).put("private", it.isPrivate)) }
+            safeContainers.forEach {
+                put(JSONObject().put("id", it.id).put("name", it.name).put("color", it.color).put("private", false))
+            }
         })
         root.put("workspaces", JSONArray().apply {
-            SoulStore.loadWorkspaces(context, containers.first().id).forEach {
+            workspaces.forEach {
                 put(JSONObject().put("id", it.id).put("name", it.name).put("containerId", it.containerId))
             }
         })
@@ -27,40 +39,55 @@ object BackupRestoreManager {
 
     fun importJson(context: Context, jsonText: String): Boolean = runCatching {
         val root = JSONObject(jsonText)
-        root.optJSONArray("bookmarks")?.let { array ->
-            val items = (0 until array.length()).map { i ->
-                val item = array.getJSONObject(i)
+        require(root.optInt("version", 1) in 1..2) { "Unsupported backup version" }
+
+        val bookmarks = root.optJSONArray("bookmarks")?.let { array ->
+            (0 until array.length()).map { index ->
+                val item = array.getJSONObject(index)
                 val url = item.getString("url")
+                require(isHttpUrl(url))
                 BrowserBookmark(url, item.optString("title", url))
             }
-            SoulStore.saveBookmarks(context, items)
         }
-        root.optJSONArray("speedDials")?.let { array ->
-            val items = (0 until array.length()).map { i ->
-                val item = array.getJSONObject(i)
-                SpeedDialItem(item.getString("title"), item.getString("url"))
+        val speedDials = root.optJSONArray("speedDials")?.let { array ->
+            (0 until array.length()).map { index ->
+                val item = array.getJSONObject(index)
+                val url = item.getString("url")
+                require(isHttpUrl(url))
+                SpeedDialItem(item.optString("title", url), url)
             }
-            SoulStore.saveSpeedDials(context, items)
         }
-        root.optJSONArray("containers")?.let { array ->
-            val items = (0 until array.length()).map { i ->
-                val item = array.getJSONObject(i)
+        val containers = root.optJSONArray("containers")?.let { array ->
+            (0 until array.length()).map { index ->
+                val item = array.getJSONObject(index)
                 BrowserContainer(
                     id = item.getString("id"),
                     name = item.getString("name"),
                     color = item.optLong("color", 0xFF9BA8FF),
-                    isPrivate = item.optBoolean("private", false)
+                    isPrivate = false
                 )
+            }.also { list ->
+                require(list.isNotEmpty())
+                require(list.map { it.id }.distinct().size == list.size)
             }
-            if (items.isNotEmpty()) SoulStore.saveContainers(context, items)
         }
-        root.optJSONArray("workspaces")?.let { array ->
-            val items = (0 until array.length()).map { i ->
-                val item = array.getJSONObject(i)
+        val workspaces = root.optJSONArray("workspaces")?.let { array ->
+            (0 until array.length()).map { index ->
+                val item = array.getJSONObject(index)
                 BrowserWorkspace(item.getString("id"), item.getString("name"), item.getString("containerId"))
+            }.also { list ->
+                require(list.map { it.id }.distinct().size == list.size)
+                val validContainerIds = (containers ?: SoulStore.loadContainers(context).filterNot { it.isPrivate })
+                    .mapTo(mutableSetOf()) { it.id }
+                require(list.all { it.containerId in validContainerIds })
             }
-            if (items.isNotEmpty()) SoulStore.saveWorkspaces(context, items)
         }
+
+        // Validate the complete document before changing persisted browser data.
+        bookmarks?.let { SoulStore.saveBookmarks(context, it) }
+        speedDials?.let { SoulStore.saveSpeedDials(context, it) }
+        containers?.let { SoulStore.saveContainers(context, it) }
+        workspaces?.let { SoulStore.saveWorkspaces(context, it) }
         true
     }.getOrDefault(false)
 }
