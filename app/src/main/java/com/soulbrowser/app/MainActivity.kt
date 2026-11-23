@@ -219,6 +219,8 @@ private fun SoulApp(
     var activeTabId by browserViewModel.activeTabIdState
 
     var showDevTools by remember { mutableStateOf(false) }
+    var swipePreviewTitle by remember { mutableStateOf<String?>(null) }
+    val windowClass = rememberBrowserWindowClass()
     var showBackupMessage by remember { mutableStateOf<String?>(null) }
 
     val backupExportLauncher = rememberLauncherForActivityResult(
@@ -812,13 +814,14 @@ private fun SoulApp(
                     .fillMaxSize()
                     .padding(padding)
                     .background(Ink)
+                    .zenAmbientGlow(Lavender)
             ) {
                 if (!isFullscreen && !settings.compactMode) {
                     // Zen-inspired compact top bar and workspace switcher.
                     Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .padding(horizontal = if (windowClass == BrowserWindowClass.EXPANDED_TABLET) 28.dp else 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -970,6 +973,12 @@ private fun SoulApp(
                         modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp)
                     )
                 }
+                if (swipePreviewTitle != null) {
+                    TabSwipePreviewIndicator(
+                        targetTabTitle = swipePreviewTitle,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                }
                 // Main content area (HomePanel or single reused GeckoView)
                 val activeSession = activeTab?.session
                 if (activeTab == null || activeSession == null || activeTab.url == "about:blank") {
@@ -1020,7 +1029,7 @@ private fun SoulApp(
                         .fillMaxWidth()
                         .padding(horizontal = 18.dp, vertical = 10.dp)
                         .clip(RoundedCornerShape(22.dp))
-                        .background(Panel)
+                         .zenGlassSurface()
                         .pointerInput(workspaces, activeWorkspace.id) {
                             var dragX = 0f
                             var dragY = 0f
@@ -1039,14 +1048,21 @@ private fun SoulApp(
                                     }
                                     dragX = 0f
                                     dragY = 0f
+                                    swipePreviewTitle = null
                                 },
                                 onDragCancel = {
                                     dragX = 0f
                                     dragY = 0f
+                                    swipePreviewTitle = null
                                 },
                                 onDrag = { change, amount ->
                                     dragX += amount.x
                                     dragY += amount.y
+                                    if (abs(dragX) > 24f && abs(dragX) > abs(dragY)) {
+                                        val currentIndex = workspaces.indexOfFirst { it.id == activeWorkspace.id }
+                                        val targetIndex = (currentIndex + if (dragX < 0) 1 else -1).coerceIn(0, workspaces.lastIndex)
+                                        swipePreviewTitle = workspaces.getOrNull(targetIndex)?.name
+                                    }
                                     change.consume()
                                 }
                             )
