@@ -10,6 +10,7 @@ object AppShortcutsPublisher {
     const val EXTRA_ACTION = "soul_shortcut_action"
     const val ACTION_NEW_TAB = "new_tab"
     const val ACTION_PRIVATE_TAB = "private_tab"
+    const val ACTION_SEARCH_WIDGET = "search_widget"
 
     fun publish(context: Context) {
         val newTab = ShortcutInfoCompat.Builder(context, "shortcut_new_tab")
