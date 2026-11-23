@@ -34,6 +34,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
@@ -69,16 +71,20 @@ private val Muted = Color(0xFF9BA0B1)
 
 class MainActivity : ComponentActivity() {
     private val incomingUrlState = mutableStateOf<String?>(null)
+    private val incomingShortcutState = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         incomingUrlState.value = extractIntentUrl(intent)
+        incomingShortcutState.value = intent?.getStringExtra(AppShortcutsPublisher.EXTRA_ACTION)
         val runtime = (application as SoulApplication).geckoRuntime
         setContent {
             SoulApp(
                 runtime = runtime,
                 incomingUrl = incomingUrlState.value,
-                onIncomingUrlConsumed = { incomingUrlState.value = null }
+                onIncomingUrlConsumed = { incomingUrlState.value = null },
+                incomingShortcutAction = incomingShortcutState.value,
+                onShortcutConsumed = { incomingShortcutState.value = null }
             )
         }
     }
@@ -87,6 +93,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         incomingUrlState.value = extractIntentUrl(intent)
+        incomingShortcutState.value = intent.getStringExtra(AppShortcutsPublisher.EXTRA_ACTION)
     }
 
     private fun extractIntentUrl(intent: Intent?): String? =
@@ -124,7 +131,9 @@ private fun extractDownloadFileName(response: WebResponse): String {
 private fun SoulApp(
     runtime: GeckoRuntime,
     incomingUrl: String? = null,
-    onIncomingUrlConsumed: () -> Unit = {}
+    onIncomingUrlConsumed: () -> Unit = {},
+    incomingShortcutAction: String? = null,
+    onShortcutConsumed: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val activity = context as Activity
@@ -132,6 +141,7 @@ private fun SoulApp(
     val keyboardController = LocalSoftwareKeyboardController.current
     val browserViewModel: BrowserViewModel = viewModel()
     val coroutineScope = rememberCoroutineScope()
+    val addressFocusRequester = remember { FocusRequester() }
 
     var pendingFilePrompt by browserViewModel.pendingFilePromptState
     var pendingDownload by browserViewModel.pendingDownloadState
@@ -207,6 +217,49 @@ private fun SoulApp(
     var tabs by browserViewModel.tabsState
     var bookmarks by browserViewModel.bookmarksState
     var activeTabId by browserViewModel.activeTabIdState
+
+    var showDevTools by remember { mutableStateOf(false) }
+    var showBackupMessage by remember { mutableStateOf<String?>(null) }
+
+    val backupExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                val output = context.contentResolver.openOutputStream(uri) ?: error("Cannot open backup destination")
+                output.bufferedWriter().use { it.write(BackupRestoreManager.exportJson(context)) }
+            }.onSuccess {
+                Toast.makeText(context, "Backup exported", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                Toast.makeText(context, "Backup export failed", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    val backupImportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: error("Cannot read backup file")
+                if (!BackupRestoreManager.importJson(context, json)) error("Invalid backup")
+                containers = SoulStore.loadContainers(context)
+                workspaces = SoulStore.loadWorkspaces(context, containers.first().id)
+                activeContainer = containers.first()
+                activeWorkspace = workspaces.first()
+                bookmarks = SoulStore.loadBookmarks(context)
+                browserViewModel.containersState.value = containers
+                browserViewModel.workspacesState.value = workspaces
+                browserViewModel.activeContainerState.value = activeContainer
+                browserViewModel.activeWorkspaceState.value = activeWorkspace
+                browserViewModel.bookmarksState.value = bookmarks
+            }.onSuccess {
+                Toast.makeText(context, "Backup restored", Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                Toast.makeText(context, "Backup restore failed", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     var settings by remember { mutableStateOf(BrowserSettingsStore.load(context)) }
     var history by remember { mutableStateOf(HistoryStore.load(context)) }
@@ -720,9 +773,26 @@ private fun SoulApp(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(incomingShortcutAction) {
         restoreSavedTabs()
         if (tabs.isEmpty()) createTab()
+        when (incomingShortcutAction) {
+            AppShortcutsPublisher.ACTION_NEW_TAB -> if (tabs.isNotEmpty()) createTab()
+            AppShortcutsPublisher.ACTION_PRIVATE_TAB -> {
+                val privateContainer = containers.firstOrNull { it.isPrivate }
+                    ?: BrowserContainer(name = "Private", color = 0xFFED8796, isPrivate = true).also {
+                        containers = containers + it
+                        SoulStore.saveContainers(context, containers)
+                        browserViewModel.containersState.value = containers
+                    }
+                createTab(containerOverride = privateContainer)
+            }
+            AppShortcutsPublisher.ACTION_SEARCH_WIDGET -> {
+                addressFocusRequester.requestFocus()
+                keyboardController?.show()
+            }
+        }
+        if (incomingShortcutAction != null) onShortcutConsumed()
     }
 
     MaterialTheme(
@@ -818,6 +888,7 @@ private fun SoulApp(
                         onValueChange = { address = it },
                         modifier = Modifier
                             .weight(1f)
+                            .focusRequester(addressFocusRequester)
                             .padding(vertical = 12.dp)
                             .onFocusChanged { isAddressFocused = it.isFocused },
                         singleLine = true,
@@ -876,18 +947,13 @@ private fun SoulApp(
                     }
                 }
 
-                // Slim loading progress bar
+                WorkspacePillBar(
+                    workspaces = workspaces,
+                    activeWorkspaceId = activeWorkspace.id,
+                    onSelect = { switchWorkspace(it) }
+                )
                 if (activeTab?.isLoading == true && activeTab.url != "about:blank") {
-                    LinearProgressIndicator(
-                        progress = { activeTab.progress.coerceIn(0, 100) / 100f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 4.dp)
-                            .height(2.dp)
-                            .clip(RoundedCornerShape(1.dp)),
-                        color = Lavender,
-                        trackColor = Panel2
-                    )
+                    ZenSmoothProgressBar(progress = activeTab.progress, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
                 } else {
                     Spacer(Modifier.height(10.dp))
                 }
@@ -1046,6 +1112,10 @@ private fun SoulApp(
                 onCopyUrl = { activeTab?.let { BrowserActions.copyToClipboard(context, it.url) } },
                 onOpenHistory = { history = HistoryStore.load(context); showHistory = true },
                 onOpenSettings = { showSettings = true },
+                onOpenDevTools = { showDevTools = true },
+                onRequestDefaultBrowser = { activity.startActivity(DefaultBrowserPrompt.createRequestIntent(context)) },
+                onExportBackup = { backupExportLauncher.launch("soul-browser-backup.json") },
+                onImportBackup = { backupImportLauncher.launch(arrayOf("application/json", "text/*")) },
                 onDismiss = { showMoreMenu = false }
             )
         }
@@ -1057,6 +1127,18 @@ private fun SoulApp(
                 onDeleteEntry = { history = HistoryStore.remove(context, it) },
                 onClearAll = { history = HistoryStore.clear(context) },
                 onDismiss = { showHistory = false }
+            )
+        }
+
+        if (showDevTools) {
+            MobileDevToolsSheet(
+                activeTab = activeTab,
+                activeSessionCount = tabs.count { it.session != null },
+                onSelectUaProfile = { UserAgentSpoofer.apply(activeTab?.session, it) },
+                onViewSource = {
+                    activeTab?.url?.takeIf { isHttpUrl(it) }?.let { activeTab.session?.loadUri("view-source:$it") }
+                },
+                onDismiss = { showDevTools = false }
             )
         }
 
