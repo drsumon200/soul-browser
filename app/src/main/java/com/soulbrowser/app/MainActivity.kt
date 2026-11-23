@@ -1103,7 +1103,7 @@ private fun SoulApp(
                                         contentDescription = "Bookmark",
                                         tint = when {
                                             privatePage -> Muted.copy(alpha = 0.35f)
-                                            isBookmarked -> Amber
+                                            isBookmarked -> SoulColors.Amber
                                             else -> Muted
                                         },
                                         modifier = Modifier.size(16.dp)
@@ -1511,7 +1511,7 @@ private fun SoulApp(
                             Icon(
                                 Icons.Default.Workspaces,
                                 "Workspaces (${activeWorkspace.name})",
-                                tint = NeonPurple,
+                                tint = SoulColors.NeonPurple,
                                 modifier = Modifier.size(21.dp)
                             )
                         }
