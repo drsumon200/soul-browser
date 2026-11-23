@@ -54,6 +54,6 @@ class SoulApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         geckoRuntime = GeckoRuntimeProvider.get(this)
-        WebExtensionManager.ensureInstalled(geckoRuntime)
+        ProFeaturesBootstrap.init(this, geckoRuntime)
     }
 }
