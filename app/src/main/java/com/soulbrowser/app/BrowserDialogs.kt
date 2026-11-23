@@ -57,6 +57,10 @@ fun BrowserMoreMenuDialog(
     onCopyUrl: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenDevTools: () -> Unit,
+    onRequestDefaultBrowser: () -> Unit,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -72,6 +76,10 @@ fun BrowserMoreMenuDialog(
                 MenuRow(Icons.Default.ContentCopy, "Copy link", hasActivePage) { onCopyUrl(); onDismiss() }
                 MenuRow(Icons.Default.History, "History", true) { onOpenHistory(); onDismiss() }
                 MenuRow(Icons.Default.Settings, "Settings", true) { onOpenSettings(); onDismiss() }
+                MenuRow(Icons.Default.Settings, "Developer tools", true) { onOpenDevTools(); onDismiss() }
+                MenuRow(Icons.Default.DesktopWindows, "Set as default browser", true) { onRequestDefaultBrowser(); onDismiss() }
+                MenuRow(Icons.Default.Share, "Export backup", true) { onExportBackup(); onDismiss() }
+                MenuRow(Icons.Default.ContentCopy, "Import backup", true) { onImportBackup(); onDismiss() }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
