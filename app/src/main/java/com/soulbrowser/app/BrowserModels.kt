@@ -29,7 +29,10 @@ data class SoulTab(
     val canGoBack: Boolean = false,
     val canGoForward: Boolean = false,
     val progress: Int = 100,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val isPinned: Boolean = false,
+    val lastAccessedAt: Long = System.currentTimeMillis(),
+    val isHibernated: Boolean = false
 )
 
 data class SavedTab(
