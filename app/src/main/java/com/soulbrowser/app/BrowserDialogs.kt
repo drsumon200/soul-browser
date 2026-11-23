@@ -56,6 +56,7 @@ fun BrowserMoreMenuDialog(
     onShare: () -> Unit,
     onCopyUrl: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenTabHistory: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenDevTools: () -> Unit,
     onRequestDefaultBrowser: () -> Unit,
@@ -76,6 +77,7 @@ fun BrowserMoreMenuDialog(
                 MenuRow(Icons.Default.Share, "Share page", hasActivePage) { onShare(); onDismiss() }
                 MenuRow(Icons.Default.ContentCopy, "Copy link", hasActivePage) { onCopyUrl(); onDismiss() }
                 MenuRow(Icons.Default.History, "History", true) { onOpenHistory(); onDismiss() }
+                MenuRow(Icons.Default.History, "Recent pages on this site", hasActivePage) { onOpenTabHistory(); onDismiss() }
                 MenuRow(Icons.Default.Settings, "Settings", true) { onOpenSettings(); onDismiss() }
                 MenuRow(Icons.Default.Settings, "Developer tools", true) { onOpenDevTools(); onDismiss() }
                 MenuRow(Icons.Default.DesktopWindows, "Set as default browser", true) { onRequestDefaultBrowser(); onDismiss() }
