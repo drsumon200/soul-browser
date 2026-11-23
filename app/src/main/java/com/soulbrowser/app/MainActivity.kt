@@ -1431,7 +1431,6 @@ private fun SoulApp(
                         }
                     }
                 }
-                }
             }
         }
 
@@ -2090,7 +2089,6 @@ private fun SoulApp(
             )
         }
     }
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
