@@ -125,7 +125,7 @@ object BrowserSessionEnhancer {
                 hasUserGesture: Boolean
             ) {
                 baseNavigation?.onLocationChange(s, url, perms, hasUserGesture)
-                if (!url.isNullOrBlank() && url.startsWith("http", ignoreCase = true)) {
+                if (!url.isNullOrBlank() && isHttpUrl(url)) {
                     hooksBySession[s]?.onHistoryRecord?.invoke(tabId, url, lastTitle)
                 }
             }
