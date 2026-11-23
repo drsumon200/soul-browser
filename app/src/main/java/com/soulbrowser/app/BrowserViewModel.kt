@@ -73,7 +73,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             .contextId(container.id)
             .usePrivateMode(container.isPrivate)
             .useTrackingProtection(true)
-            .suspendMediaWhenInactive(true)
+            .suspendMediaWhenInactive(false)
             .build()
 
         return GeckoSession(settings).also { session ->

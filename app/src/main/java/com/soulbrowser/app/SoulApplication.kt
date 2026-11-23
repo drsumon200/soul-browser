@@ -22,7 +22,7 @@ object GeckoRuntimeProvider {
                 (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
             val settingsBuilder = GeckoRuntimeSettings.Builder()
-                .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_LIGHT)
+                .preferredColorScheme(GeckoRuntimeSettings.COLOR_SCHEME_DARK)
                 .aboutConfigEnabled(isDebuggable)
                 .remoteDebuggingEnabled(isDebuggable)
 

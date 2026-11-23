@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.SoulBrowser" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.SoulBrowser" parent="android:Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:windowBackground">#F9FAFD</item>
-        <item name="android:colorPrimary">#6366F1</item>
-        <item name="android:colorAccent">#6366F1</item>
-        <item name="android:statusBarColor">#F9FAFD</item>
-        <item name="android:navigationBarColor">#FFFFFF</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowBackground">#140D26</item>
+        <item name="android:colorPrimary">#A855F7</item>
+        <item name="android:colorAccent">#A855F7</item>
+        <item name="android:statusBarColor">#140D26</item>
+        <item name="android:navigationBarColor">#00000000</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 </resources>

@@ -1,6 +1,8 @@
 package com.soulbrowser.app
 
 import android.app.Activity
+import android.view.WindowManager
+import android.os.Build
 import android.app.AlertDialog as NativeAlertDialog
 import android.content.Intent
 import android.net.Uri
@@ -82,6 +84,24 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Configure 120Hz smooth scrolling refresh rate on supported devices (Honor 200 / MagicOS 10)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                val display = display
+                val modes = display?.supportedModes
+                val highRefreshMode = modes?.maxByOrNull { it.refreshRate }
+                if (highRefreshMode != null && highRefreshMode.refreshRate >= 90f) {
+                    window.attributes = window.attributes.apply {
+                        preferredDisplayModeId = highRefreshMode.modeId
+                    }
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                window.attributes = window.attributes.apply {
+                    preferredRefreshRate = 120f
+                }
+            }
+            window.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+        }
         incomingUrlState.value = extractIntentUrl(intent)
         val runtime = (application as SoulApplication).geckoRuntime
         setContent {
@@ -951,94 +971,113 @@ private fun SoulApp(
                     .background(Ink)
             ) {
                 if (!isFullscreen) {
-                    // Unified Top Address Bar (Zen standard)
+                    // Standard Top Browser Header (History | Omnibox | Tabs [N] | Menu (⋮))
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                            .shadow(2.dp, RoundedCornerShape(20.dp))
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Panel)
-                            .border(1.dp, SoulColors.Border, RoundedCornerShape(20.dp))
-                            .padding(horizontal = 10.dp, vertical = 3.dp),
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Privacy & Security Shield Icon
+                        // History Button in corner
                         IconButton(
-                            onClick = { showPrivacyShield = true },
-                            modifier = Modifier.size(32.dp)
+                            onClick = {
+                                history = HistoryStore.load(context)
+                                showHistory = true
+                            },
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            Box(contentAlignment = Alignment.TopEnd) {
-                                if (activeTab?.let { isHttpsUrl(it.url) } == true) {
-                                    Icon(
-                                        Icons.Default.Lock,
-                                        contentDescription = "HTTPS connection",
-                                        tint = if (secureByTabId[activeTab.id] == true) SoulColors.Mint else Lavender,
-                                        modifier = Modifier.size(17.dp)
-                                    )
-                                } else {
-                                    Icon(
-                                        Icons.Default.Shield,
-                                        contentDescription = "Privacy Shield",
-                                        tint = if (settings.trackingProtection) Lavender else Muted,
-                                        modifier = Modifier.size(17.dp)
-                                    )
-                                }
-                                val blockedCount = AdblockFilterEngine.totalBlocked()
-                                if (blockedCount > 0) {
-                                    Box(
-                                        Modifier
-                                            .size(10.dp)
-                                            .clip(CircleShape)
-                                            .background(SoulColors.Rose)
-                                    )
-                                }
-                            }
+                            Icon(
+                                Icons.Default.History,
+                                contentDescription = "History",
+                                tint = SoulColors.TextSub,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
 
-                        Spacer(Modifier.width(6.dp))
-
-                        // Address / Search Input Field
-                        BasicTextField(
-                            value = address,
-                            onValueChange = { address = it },
-                            modifier = Modifier
+                        // Central Address / Search Omnibox
+                        Row(
+                            Modifier
                                 .weight(1f)
-                                .padding(vertical = 10.dp)
-                                .onFocusChanged { isAddressFocused = it.isFocused },
-                            singleLine = true,
-                            cursorBrush = SolidColor(Lavender),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(onSearch = { submitAddress() }),
-                            textStyle = TextStyle(color = SoulColors.Text, fontSize = 14.sp),
-                            decorationBox = { inner ->
-                                if (address.isEmpty()) {
-                                    Text("Search or enter address", color = Muted, fontSize = 14.sp)
+                                .padding(horizontal = 4.dp)
+                                .shadow(2.dp, RoundedCornerShape(20.dp))
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Panel)
+                                .border(1.dp, SoulColors.Border, RoundedCornerShape(20.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Security Lock / Shield Indicator
+                            IconButton(
+                                onClick = { showPrivacyShield = true },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.TopEnd) {
+                                    if (activeTab?.let { isHttpsUrl(it.url) } == true) {
+                                        Icon(
+                                            Icons.Default.Lock,
+                                            contentDescription = "HTTPS connection",
+                                            tint = if (secureByTabId[activeTab.id] == true) SoulColors.Mint else Lavender,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.Shield,
+                                            contentDescription = "Privacy Shield",
+                                            tint = if (settings.trackingProtection) Lavender else Muted,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
+                                    val blockedCount = AdblockFilterEngine.totalBlocked()
+                                    if (blockedCount > 0) {
+                                        Box(
+                                            Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(SoulColors.Rose)
+                                        )
+                                    }
                                 }
-                                inner()
                             }
-                        )
 
-                        val privatePage = activeTab?.let { tab ->
-                            containers.firstOrNull { it.id == tab.containerId }?.isPrivate == true
-                        } == true
-                        val isBookmarked = activeTab != null && bookmarks.any { it.url == activeTab.url }
+                            BasicTextField(
+                                value = address,
+                                onValueChange = { address = it },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(vertical = 8.dp)
+                                    .onFocusChanged { isAddressFocused = it.isFocused },
+                                singleLine = true,
+                                cursorBrush = SolidColor(Lavender),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                keyboardActions = KeyboardActions(onSearch = { submitAddress() }),
+                                textStyle = TextStyle(color = SoulColors.Text, fontSize = 13.5.sp),
+                                decorationBox = { inner ->
+                                    if (address.isEmpty()) {
+                                        Text("Search or URL", color = Muted, fontSize = 13.5.sp)
+                                    }
+                                    inner()
+                                }
+                            )
 
-                        if (isAddressFocused && address.isNotEmpty()) {
-                            IconButton(
-                                onClick = { address = "" },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(Icons.Default.Clear, "Clear", tint = Muted, modifier = Modifier.size(16.dp))
-                            }
-                            IconButton(
-                                onClick = { submitAddress() },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowForward, "Go", tint = Lavender, modifier = Modifier.size(18.dp))
-                            }
-                        } else {
-                            if (activeTab != null && activeTab.url != "about:blank" && isHttpUrl(activeTab.url)) {
+                            val privatePage = activeTab?.let { tab ->
+                                containers.firstOrNull { it.id == tab.containerId }?.isPrivate == true
+                            } == true
+                            val isBookmarked = activeTab != null && bookmarks.any { it.url == activeTab.url }
+
+                            if (isAddressFocused && address.isNotEmpty()) {
+                                IconButton(
+                                    onClick = { address = "" },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.Default.Clear, "Clear", tint = Muted, modifier = Modifier.size(15.dp))
+                                }
+                                IconButton(
+                                    onClick = { submitAddress() },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowForward, "Go", tint = Lavender, modifier = Modifier.size(16.dp))
+                                }
+                            } else if (activeTab != null && activeTab.url != "about:blank" && isHttpUrl(activeTab.url)) {
                                 IconButton(
                                     enabled = !privatePage,
                                     onClick = {
@@ -1057,20 +1096,19 @@ private fun SoulApp(
                                             HapticFeedbackEngine.tick(activeGeckoView)
                                         }
                                     },
-                                    modifier = Modifier.size(32.dp)
+                                    modifier = Modifier.size(28.dp)
                                 ) {
                                     Icon(
                                         Icons.Default.Star,
                                         contentDescription = "Bookmark",
                                         tint = when {
                                             privatePage -> Muted.copy(alpha = 0.35f)
-                                            isBookmarked -> Lavender
+                                            isBookmarked -> Amber
                                             else -> Muted
                                         },
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
-
                                 IconButton(
                                     onClick = {
                                         if (activeTab.isLoading) {
@@ -1080,31 +1118,61 @@ private fun SoulApp(
                                         }
                                         HapticFeedbackEngine.tick(activeGeckoView)
                                     },
-                                    modifier = Modifier.size(32.dp)
+                                    modifier = Modifier.size(28.dp)
                                 ) {
                                     Icon(
                                         if (activeTab.isLoading) Icons.Default.Close else Icons.Default.Refresh,
                                         contentDescription = if (activeTab.isLoading) "Stop" else "Reload",
                                         tint = SoulColors.Text,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
                             } else {
                                 IconButton(
                                     onClick = { qrScannerLauncher.launch(Unit) },
-                                    modifier = Modifier.size(32.dp)
+                                    modifier = Modifier.size(28.dp)
                                 ) {
-                                    Icon(Icons.Default.QrCodeScanner, "Scan QR code", tint = Muted, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.QrCodeScanner, "Scan QR", tint = Muted, modifier = Modifier.size(16.dp))
                                 }
                                 IconButton(
                                     onClick = { voiceSearchLauncher.launch(Unit) },
-                                    modifier = Modifier.size(32.dp)
+                                    modifier = Modifier.size(28.dp)
                                 ) {
-                                    Icon(Icons.Default.Mic, "Voice search", tint = Muted, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.Mic, "Voice search", tint = Muted, modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
-                    }
+
+                        // All Tabs Counter Button
+                        IconButton(
+                            onClick = {
+                                showVisualTabs = true
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(22.dp)
+                                    .border(1.5.dp, SoulColors.Text, RoundedCornerShape(5.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (workspaceTabCount > 99) "99+" else "$workspaceTabCount",
+                                    color = SoulColors.Text,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        // Three-Dot Menu Button for Settings & Rest
+                        IconButton(
+                            onClick = { showMoreMenu = true },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(Icons.Default.MoreVert, "Settings and options", tint = SoulColors.Text, modifier = Modifier.size(20.dp))
+                        }
                     }
 
                     // Omnibox Smart Helpers (Inline Calculator, Bang Hints, Suggestions)
@@ -1279,7 +1347,7 @@ private fun SoulApp(
                                         factory = { viewContext ->
                                             GeckoView(viewContext).apply {
                                                 activeGeckoView = this
-                                                coverUntilFirstPaint(0xFFF8FAFC.toInt())
+                                                coverUntilFirstPaint(0xFF140D26.toInt())
                                                 setSession(activeSession)
                                             }
                                         },
@@ -1287,7 +1355,7 @@ private fun SoulApp(
                                             activeGeckoView = geckoView
                                             if (geckoView.session !== activeSession) {
                                                 geckoView.releaseSession()
-                                                geckoView.coverUntilFirstPaint(0xFFF8FAFC.toInt())
+                                                geckoView.coverUntilFirstPaint(0xFF140D26.toInt())
                                                 geckoView.setSession(activeSession)
                                             }
                                         },
@@ -1341,98 +1409,132 @@ private fun SoulApp(
                 }
 
                 if (!isFullscreen) {
-                    // Standard 5-Button Bottom Navigation Bar (Back | Forward | Home | Tabs [N] | Menu)
+                    // Transparent Bottom Navigation Bar (Back | Forward | Container | Home | Workspace | Bookmarks)
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                            .shadow(6.dp, RoundedCornerShape(22.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .shadow(0.dp)
                             .clip(RoundedCornerShape(22.dp))
-                            .background(Panel)
-                            .border(1.dp, SoulColors.Border, RoundedCornerShape(22.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                            .background(Color(0xD91F1538)) // Frosted translucent dark purple
+                            .border(1.dp, Color(0x40A855F7), RoundedCornerShape(22.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceAround
                     ) {
                         val canBack = activeTab?.canGoBack == true
                         val canForward = activeTab?.canGoForward == true
 
-                        // 1. Back Button
+                        // 1. Back
                         IconButton(
                             onClick = {
                                 activeTab?.session?.goBack()
                                 HapticFeedbackEngine.tick(activeGeckoView)
                             },
-                            enabled = canBack
+                            enabled = canBack,
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 "Back",
-                                tint = if (canBack) SoulColors.Text else Muted.copy(alpha = 0.35f)
+                                tint = if (canBack) SoulColors.Text else Muted.copy(alpha = 0.35f),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        // 2. Forward Button
+                        // 2. Forward
                         IconButton(
                             onClick = {
                                 activeTab?.session?.goForward()
                                 HapticFeedbackEngine.tick(activeGeckoView)
                             },
-                            enabled = canForward
+                            enabled = canForward,
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowForward,
                                 "Forward",
-                                tint = if (canForward) SoulColors.Text else Muted.copy(alpha = 0.35f)
+                                tint = if (canForward) SoulColors.Text else Muted.copy(alpha = 0.35f),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        // 3. Home / New Tab Button
+                        // 3. Container Switcher
                         IconButton(
                             onClick = {
-                                if (activeTab != null && activeTab.url != "about:blank") {
-                                    createTab()
-                                } else {
-                                    createTab()
-                                }
+                                showContainers = true
                                 HapticFeedbackEngine.tick(activeGeckoView)
-                            }
+                            },
+                            modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(Icons.Default.Home, "Home", tint = Lavender)
-                        }
-
-                        // 4. Tabs Overview Counter Button
-                        IconButton(
-                            onClick = {
-                                showVisualTabs = true
-                                HapticFeedbackEngine.tick(activeGeckoView)
-                            }
-                        ) {
-                            Box(
-                                Modifier
-                                    .size(24.dp)
-                                    .border(1.5.dp, SoulColors.Text, RoundedCornerShape(6.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (workspaceTabCount > 99) "99+" else "$workspaceTabCount",
-                                    color = SoulColors.Text,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.Layers,
+                                    "Containers",
+                                    tint = Color(activeContainer.color),
+                                    modifier = Modifier.size(21.dp)
+                                )
+                                Box(
+                                    Modifier
+                                        .size(6.dp)
+                                        .align(Alignment.BottomEnd)
+                                        .clip(CircleShape)
+                                        .background(Color(activeContainer.color))
                                 )
                             }
                         }
 
-                        // 5. Menu Button
+                        // 4. Home Button (Center)
                         IconButton(
-                            onClick = { showMoreMenu = true }
+                            onClick = {
+                                createTab()
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            modifier = Modifier.size(40.dp)
                         ) {
-                            Icon(Icons.Default.MoreVert, "Menu", tint = SoulColors.Text)
+                            Icon(
+                                Icons.Default.Home,
+                                "Home",
+                                tint = Lavender,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        // 5. Workspace Switcher
+                        IconButton(
+                            onClick = {
+                                showSpaces = true
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Workspaces,
+                                "Workspaces (${activeWorkspace.name})",
+                                tint = NeonPurple,
+                                modifier = Modifier.size(21.dp)
+                            )
+                        }
+
+                        // 6. Bookmarks
+                        IconButton(
+                            onClick = {
+                                showBookmarks = true
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Bookmark,
+                                "Bookmarks",
+                                tint = SoulColors.TextSub,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                 }
-            }
         }
+            }
 
         // Visual Tabs Sheet (with live thumbnails & container indicators)
         if (showVisualTabs) {
@@ -2088,6 +2190,7 @@ private fun SoulApp(
                 }
             )
         }
+    }
     }
 
 @OptIn(ExperimentalFoundationApi::class)
