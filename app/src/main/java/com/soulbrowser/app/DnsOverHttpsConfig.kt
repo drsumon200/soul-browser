@@ -1,0 +1,4 @@
+package com.soulbrowser.app
+import android.content.Context
+enum class DohProvider(val label:String,val endpoint:String){ SYSTEM("System DNS (Default)",""),CLOUDFLARE("Cloudflare 1.1.1.1","https://mozilla.cloudflare-dns.com/dns-query"),QUAD9("Quad9 Security","https://dns.quad9.net/dns-query"),ADGUARD("AdGuard DNS (Ad-blocking)","https://dns.adguard-dns.com/dns-query"),MULLVAD("Mullvad Privacy DNS","https://dns.mullvad.net/dns-query"); companion object{fun fromName(raw:String?)=entries.firstOrNull{it.name==raw}?:SYSTEM} }
+object DohStore { private const val PREFS="soul_doh_prefs"; private const val KEY="provider"; fun load(c:Context)=DohProvider.fromName(c.getSharedPreferences(PREFS,0).getString(KEY,null)); fun save(c:Context,p:DohProvider){c.getSharedPreferences(PREFS,0).edit().putString(KEY,p.name).apply()} }
