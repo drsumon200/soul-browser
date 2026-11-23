@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -90,7 +91,7 @@ class MainActivity : ComponentActivity() {
 
     private fun extractIntentUrl(intent: Intent?): String? =
         if (intent?.action == Intent.ACTION_VIEW) {
-            intent.dataString?.takeIf { it.startsWith("http", ignoreCase = true) }
+            intent.dataString?.takeIf(::isHttpUrl)
         } else null
 }
 
@@ -173,21 +174,25 @@ private fun SoulApp(
         pendingDownload = null
         val body = response?.body
         if (destination != null && body != null) {
+            val appContext = context.applicationContext
             coroutineScope.launch(Dispatchers.IO) {
-                val result = runCatching {
-                    val output = context.contentResolver.openOutputStream(destination)
-                    if (output != null) {
-                        output.use { sink ->
-                            body.use { source -> source.copyTo(sink) }
-                        }
-                    } else {
-                        body.close()
-                        error("Unable to open destination stream")
+                val saved = try {
+                    val output = appContext.contentResolver.openOutputStream(destination)
+                        ?: error("Unable to open destination stream")
+                    output.use { sink ->
+                        body.use { source -> source.copyTo(sink) }
                     }
+                    true
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    false
+                } finally {
+                    runCatching { body.close() }
                 }
                 withContext(Dispatchers.Main) {
-                    val msg = if (result.isSuccess) "Download saved" else "Download failed"
-                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    val msg = if (saved) "Download saved" else "Download failed"
+                    Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
                 }
             }
         } else {
@@ -794,7 +799,7 @@ private fun SoulApp(
                         .padding(horizontal = 12.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (activeTab?.url?.startsWith("https://", ignoreCase = true) == true) {
+                    if (activeTab?.let { isHttpsUrl(it.url) } == true) {
                         Icon(
                             Icons.Default.Lock,
                             contentDescription = "HTTPS connection",
@@ -832,10 +837,10 @@ private fun SoulApp(
                     } == true
                     val isBookmarked = activeTab != null && bookmarks.any { it.url == activeTab.url }
                     IconButton(
-                        enabled = activeTab != null && !privatePage && activeTab.url.startsWith("http"),
+                        enabled = activeTab != null && !privatePage && isHttpUrl(activeTab.url),
                         onClick = {
                             val current = activeTab
-                            if (current != null && !privatePage && current.url.startsWith("http")) {
+                            if (current != null && !privatePage && isHttpUrl(current.url)) {
                                 val existing = bookmarks.any { it.url == current.url }
                                 bookmarks = if (existing) {
                                     bookmarks.filterNot { it.url == current.url }
