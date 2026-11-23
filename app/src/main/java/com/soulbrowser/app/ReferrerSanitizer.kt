@@ -1,0 +1,3 @@
+package com.soulbrowser.app
+import java.net.URI
+object ReferrerSanitizer { fun computeSafeReferrer(fromUrl:String?,toUrl:String):String?{if(fromUrl.isNullOrBlank())return null;val from=runCatching{URI(fromUrl)}.getOrNull()?:return null;val to=runCatching{URI(toUrl)}.getOrNull()?:return null;if(from.scheme.equals("https",true)&&to.scheme.equals("http",true))return null;val host=from.host?:return null;return if(host.equals(to.host,true))fromUrl else (from.scheme?:"https")+"://"+host+"/"} }
