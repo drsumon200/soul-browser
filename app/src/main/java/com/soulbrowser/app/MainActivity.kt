@@ -972,7 +972,7 @@ private fun SoulApp(
                     .background(Ink)
             ) {
                 if (!isFullscreen) {
-                    if (activeTab?.url != "about:blank") {
+                    if (activeTab?.url?.let { it != "about:blank" } == true) {
                     // Standard Top Browser Header (History | Omnibox | Tabs [N] | Menu (⋮))
                     Row(
                         Modifier
