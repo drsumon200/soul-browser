@@ -1003,7 +1003,165 @@ private fun SoulApp(
             onSurface = SoulColors.Text
         )
     ) {
-        Scaffold(containerColor = Ink) { padding ->
+        Scaffold(
+            containerColor = Ink,
+            bottomBar = {
+                if (!isFullscreen) {
+                    // Transparent Bottom Navigation Bar (Back | Forward | Containers | Home | Workspaces | Tabs [N] | New Tab (+))
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .shadow(0.dp)
+                            .clip(RoundedCornerShape(24.dp))
+                            .background(SoulColors.NavBarBg)
+                            .border(1.dp, if (settings.isDarkMode) Color(0x40A855F7) else Color(0x40CBD5E1), RoundedCornerShape(24.dp))
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // 1. Back Button
+                        IconButton(
+                            onClick = {
+                                if (activeTab?.session != null && activeTab.canGoBack) {
+                                    activeTab.session.goBack()
+                                } else if (activeTab != null && activeTab.url != "about:blank") {
+                                    address = ""
+                                    navigateTo("about:blank")
+                                }
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                "Back",
+                                tint = if (activeTab?.canGoBack == true || (activeTab != null && activeTab.url != "about:blank")) SoulColors.Text else SoulColors.Muted.copy(alpha = 0.4f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // 2. Forward Button
+                        IconButton(
+                            onClick = {
+                                activeTab?.session?.goForward()
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            enabled = activeTab?.canGoForward == true,
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowForward,
+                                "Forward",
+                                tint = if (activeTab?.canGoForward == true) SoulColors.Text else SoulColors.Muted.copy(alpha = 0.4f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // 3. Container Switcher
+                        IconButton(
+                            onClick = {
+                                showContainers = true
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.Layers,
+                                    "Containers",
+                                    tint = Color(activeContainer.color),
+                                    modifier = Modifier.size(21.dp)
+                                )
+                                Box(
+                                    Modifier
+                                        .size(6.dp)
+                                        .align(Alignment.BottomEnd)
+                                        .clip(CircleShape)
+                                        .background(Color(activeContainer.color))
+                                )
+                            }
+                        }
+
+                        // 4. Home Button
+                        IconButton(
+                            onClick = {
+                                if (activeTab != null && activeTab.url != "about:blank") {
+                                    createTab()
+                                } else {
+                                    createTab()
+                                }
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Home,
+                                "Home",
+                                tint = SoulColors.Lavender,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        // 5. Workspace Switcher
+                        IconButton(
+                            onClick = {
+                                showSpaces = true
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Workspaces,
+                                "Workspaces (${activeWorkspace.name})",
+                                tint = SoulColors.NeonPurple,
+                                modifier = Modifier.size(21.dp)
+                            )
+                        }
+
+                        // 6. Tabs Overview Counter Button
+                        IconButton(
+                            onClick = {
+                                showVisualTabs = true
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(22.dp)
+                                    .border(1.5.dp, SoulColors.Text, RoundedCornerShape(5.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (workspaceTabCount > 99) "99+" else "$workspaceTabCount",
+                                    color = SoulColors.Text,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        // 7. Add New Tab Button (Always Present)
+                        IconButton(
+                            onClick = {
+                                createTab()
+                                HapticFeedbackEngine.tick(activeGeckoView)
+                            },
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                "Add new tab",
+                                tint = SoulColors.Lavender,
+                                modifier = Modifier.size(23.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        ) { padding ->
             Column(
                 Modifier
                     .fillMaxSize()
@@ -1329,128 +1487,7 @@ private fun SoulApp(
                                     }
                                 )
                             } else if (activeTab == null || activeSession == null || activeTab.url == "about:blank") {
-                                ZenHomePanel(
-                                    modifier = Modifier.fillMaxSize(),
-                                    activeWorkspace = activeWorkspace,
-                                    workspaces = workspaces,
-                                    activeContainer = activeContainer,
-                                    containers = containers,
-                                    speedDials = speedDials,
-                                    tabCount = workspaceTabCount,
-                                    coverImageUri = settings.homeCoverUri,
-                                    onChangeCover = { homeCoverPicker.launch(arrayOf("image/*")) },
-                                    onSearch = { raw ->
-                                        val target = normalizeAddress(raw, settings.searchEngine)
-                                        if (target.isNotBlank()) navigateTo(target)
-                                    },
-                                    onOpenSpeedDial = { item -> navigateTo(item.url) },
-                                    onEditSpeedDial = { item ->
-                                        editingSpeedDial = item
-                                        showSpeedDialEditor = true
-                                    },
-                                    onAddSpeedDial = {
-                                        editingSpeedDial = null
-                                        showSpeedDialEditor = true
-                                    },
-                                    onSwitchWorkspace = { switchWorkspace(it) },
-                                    onSelectContainer = { item ->
-                                        val action = {
-                                            activeContainer = item
-                                            workspaces = workspaces.map { space ->
-                                                if (space.id == activeWorkspace.id) space.copy(containerId = item.id) else space
-                                            }
-                                            activeWorkspace = workspaces.first { it.id == activeWorkspace.id }
-                                            SoulStore.saveWorkspaces(context, workspaces)
-                                            createTab(containerOverride = item)
-                                        }
-                                        if (item.isPrivate) requestPrivateAccess(action) else action()
-                                    },
-                                    onOpenWorkspaces = { showSpaces = true },
-                                    onOpenContainers = { showContainers = true },
-                                    onOpenTabs = { showVisualTabs = true },
-                                    onOpenMenu = { showMoreMenu = true },
-                                )
-                            } else if (splitViewState.isEnabled && splitViewState.secondaryTabId != null) {
-                                val secondaryTab = tabs.firstOrNull { it.id == splitViewState.secondaryTabId }
-                                val secSession = secondaryTab?.let { ensureSession(it.id) }
-                                if (secSession != null) {
-                                    SplitViewHost(
-                                        primarySession = activeSession,
-                                        secondarySession = secSession,
-                                        splitRatio = splitViewState.splitRatio,
-                                        focusedPane = splitViewState.focusedPane,
-                                        onFocusPane = { pane ->
-                                            splitViewState = splitViewState.copy(focusedPane = pane)
-                                        },
-                                        onDragRatioDelta = { delta ->
-                                            splitViewState = SplitViewReducer.adjustRatio(splitViewState, delta)
-                                        },
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                            } else {
-                                Box(Modifier.fillMaxSize()) {
-                                    AndroidView(
-                                        modifier = Modifier.fillMaxSize(),
-                                        factory = { viewContext ->
-                                            GeckoView(viewContext).apply {
-                                                activeGeckoView = this
-                                                coverUntilFirstPaint(if (settings.isDarkMode) 0xFF140D26.toInt() else 0xFFF8FAFC.toInt())
-                                                setSession(activeSession)
-                                            }
-                                        },
-                                        update = { geckoView ->
-                                            activeGeckoView = geckoView
-                                            if (geckoView.session !== activeSession) {
-                                                geckoView.releaseSession()
-                                                geckoView.coverUntilFirstPaint(if (settings.isDarkMode) 0xFF140D26.toInt() else 0xFFF8FAFC.toInt())
-                                                geckoView.setSession(activeSession)
-                                            }
-                                        },
-                                        onRelease = { geckoView ->
-                                            geckoView.releaseSession()
-                                        }
-                                    )
-
-                                    if (isFullscreen) {
-                                        VideoGestureOverlay(enabled = true)
-                                    }
-                                }
-                            }
-
-                            // Floating TTS Player
-                            if (isTtsPlaying) {
-                                Box(
-                                    Modifier
-                                        .align(Alignment.TopCenter)
-                                        .padding(top = 10.dp)
-                                ) {
-                                    FloatingTtsPlayer(
-                                        speed = ttsSpeed,
-                                        onCycleSpeed = {
-                                            ttsSpeed = when (ttsSpeed) {
-                                                1.0f -> 1.25f
-                                                1.25f -> 1.5f
-                                                1.5f -> 2.0f
-                                                else -> 1.0f
-                                            }
-                                            activeArticle?.let {
-                                                ttsEngine.speak(it.paragraphs.joinToString("\n\n"), ttsSpeed)
-                                            }
-                                        },
-                                        onStop = {
-                                            ttsEngine.stop()
-                                            isTtsPlaying = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                }
-
-                if (showFindBar) {
-                    FindInPageBar(
-                        session = activeTab?.session,
+                                ZiveTab?.session,
                         onClose = { showFindBar = false }
                     )
                 }
