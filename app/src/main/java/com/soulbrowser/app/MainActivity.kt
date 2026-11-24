@@ -1323,7 +1323,7 @@ private fun SoulApp(
                                                 navigateTo(PageTranslateHelper.buildTranslatedUrl(it.url))
                                             } ?: Toast.makeText(context, "Open a page first", Toast.LENGTH_SHORT).show()
                                             "Screenshot" -> {
-                                                if (activeTab?.url != "about:blank") FullPageScreenshotter.captureAndSave(context, activeGeckoView)
+                                                if (activeTab?.url?.let { it != "about:blank" } == true) FullPageScreenshotter.captureAndSave(context, activeGeckoView)
                                                 else Toast.makeText(context, "Open a page first", Toast.LENGTH_SHORT).show()
                                             }
                                             "Reader Mode" -> activeTab?.takeIf { it.url != "about:blank" }?.let { tab ->
