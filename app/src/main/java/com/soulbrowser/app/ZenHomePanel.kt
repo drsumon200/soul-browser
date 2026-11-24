@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.Workspaces
 import androidx.compose.material3.Icon
@@ -40,8 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -50,6 +50,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -61,6 +62,8 @@ internal fun ZenHomePanel(
     containers: List<BrowserContainer>,
     speedDials: List<SpeedDialItem>,
     tabCount: Int,
+    coverImageUri: String?,
+    onChangeCover: () -> Unit,
     onSearch: (String) -> Unit,
     onOpenSpeedDial: (SpeedDialItem) -> Unit,
     onEditSpeedDial: (SpeedDialItem) -> Unit,
@@ -75,48 +78,22 @@ internal fun ZenHomePanel(
     var query by remember { mutableStateOf("") }
     val accent = Color(0xFFAE83FF)
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(
+    Box(modifier = modifier.fillMaxSize()) {
+        AsyncImage(
+            model = coverImageUri ?: DEFAULT_HOME_COVER_URL,
+            contentDescription = "Home screen cover photo",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF111A3A), Color(0xFF252447), Color(0xFF17243D), Color(0xFF10182B))
+                    0f to Color(0x180A1020),
+                    0.42f to Color(0x300A1020),
+                    1f to Color(0xB80A1020)
                 )
             )
-    ) {
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            drawRect(
-                Brush.radialGradient(
-                    colors = listOf(Color(0xFFFF9C88).copy(alpha = 0.42f), Color(0xFF5A4D76).copy(alpha = 0.12f), Color.Transparent),
-                    center = Offset(w * 0.52f, h * 0.34f),
-                    radius = w * 0.82f
-                )
-            )
-            val distantRidge = Path().apply {
-                moveTo(0f, h * 0.47f)
-                cubicTo(w * 0.18f, h * 0.38f, w * 0.22f, h * 0.50f, w * 0.42f, h * 0.44f)
-                cubicTo(w * 0.60f, h * 0.36f, w * 0.72f, h * 0.50f, w, h * 0.40f)
-                lineTo(w, h)
-                lineTo(0f, h)
-                close()
-            }
-            drawPath(distantRidge, Brush.verticalGradient(listOf(Color(0xFF3B456B), Color(0xFF18233D)), h * 0.38f, h * 0.78f))
-            val nearRidge = Path().apply {
-                moveTo(0f, h * 0.59f)
-                cubicTo(w * 0.12f, h * 0.48f, w * 0.20f, h * 0.65f, w * 0.36f, h * 0.57f)
-                cubicTo(w * 0.56f, h * 0.48f, w * 0.72f, h * 0.67f, w, h * 0.54f)
-                lineTo(w, h)
-                lineTo(0f, h)
-                close()
-            }
-            drawPath(nearRidge, Brush.verticalGradient(listOf(Color(0xFF1A2945).copy(alpha = 0.72f), Color(0xFF10182D)), h * 0.52f, h))
-            for (i in 0..8) {
-                val y = h * (0.68f + i * 0.025f)
-                drawLine(Color(0xFFFFB59A).copy(alpha = 0.10f - i * 0.008f), Offset(w * 0.18f, y), Offset(w * 0.82f, y), strokeWidth = 1.2f)
-            }
-        }
+        )
         Column(
             Modifier
                 .fillMaxSize()
@@ -330,5 +307,23 @@ internal fun ZenHomePanel(
             }
             Spacer(Modifier.height(18.dp))
         }
+        Surface(
+            onClick = onChangeCover,
+            color = Color(0xB8202030),
+            shape = CircleShape,
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.42f)),
+            shadowElevation = 6.dp,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(14.dp)
+        ) {
+            Icon(
+                Icons.Default.Settings,
+                contentDescription = "Change cover photo",
+                tint = Color.White,
+                modifier = Modifier.padding(11.dp).size(19.dp)
+            )
+        }
     }
 }
+
+private const val DEFAULT_HOME_COVER_URL =
+    "https://images.pexels.com/photos/6315862/pexels-photo-6315862.jpeg?auto=compress&cs=tinysrgb&w=1800"
