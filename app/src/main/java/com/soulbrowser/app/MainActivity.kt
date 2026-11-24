@@ -216,7 +216,7 @@ private fun SoulApp(
         runtime.webExtensionController.list().accept(
             { list -> installedExtensions = list ?: emptyList() },
             { error ->
-                Toast.makeText(context, "Could not load extensions: ${error.message ?: "unknown error"}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Could not load extensions: ${error?.message ?: "unknown error"}", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -1895,12 +1895,12 @@ private fun SoulApp(
                                 },
                                 { error ->
                                     isInstallingExtension = false
-                                    Toast.makeText(context, "Extension install failed: ${error.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "Extension install failed: ${error?.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
                                 }
                             )
                         }.onFailure { error ->
                             isInstallingExtension = false
-                            Toast.makeText(context, "Extension install failed: ${error.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "Extension install failed: ${error?.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
                         }
                     }
                 },
@@ -1913,7 +1913,7 @@ private fun SoulApp(
                     operation.accept(
                         { refreshInstalledExtensions() },
                         { error ->
-                            Toast.makeText(context, "Could not update extension: ${error.message ?: "unknown error"}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Could not update extension: ${error?.message ?: "unknown error"}", Toast.LENGTH_SHORT).show()
                         }
                     )
                 },
@@ -1929,7 +1929,7 @@ private fun SoulApp(
                                     Toast.makeText(context, "Extension removed", Toast.LENGTH_SHORT).show()
                                 },
                                 { error ->
-                                    Toast.makeText(context, "Could not remove extension: ${error.message ?: "unknown error"}", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Could not remove extension: ${error?.message ?: "unknown error"}", Toast.LENGTH_SHORT).show()
                                 }
                             )
                         }
