@@ -64,6 +64,7 @@ internal fun ZenHomePanel(
     onEditSpeedDial: (SpeedDialItem) -> Unit,
     onAddSpeedDial: () -> Unit,
     onSwitchWorkspace: (BrowserWorkspace) -> Unit,
+    onSelectContainer: (BrowserContainer) -> Unit,
     onOpenWorkspaces: () -> Unit,
     onOpenContainers: () -> Unit,
     onOpenTabs: () -> Unit,
@@ -304,7 +305,7 @@ internal fun ZenHomePanel(
                         containers.forEach { container ->
                             val selected = container.id == activeContainer.id
                             Surface(
-                                onClick = onOpenContainers,
+                                onClick = { onSelectContainer(container) },
                                 color = Color(container.color).copy(alpha = if (selected) 0.82f else 0.34f),
                                 shape = RoundedCornerShape(16.dp),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = if (selected) 0.35f else 0.12f))
