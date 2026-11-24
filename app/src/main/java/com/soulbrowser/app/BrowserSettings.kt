@@ -24,7 +24,8 @@ data class BrowserSettings(
     val reachabilityEnabled: Boolean = false,
     val edgeGesturesEnabled: Boolean = false,
     val dohProvider: DohProvider = DohProvider.SYSTEM,
-    val isDarkMode: Boolean = true
+    val isDarkMode: Boolean = true,
+    val homeCoverUri: String? = null
 )
 
 object BrowserSettingsStore {
@@ -38,6 +39,7 @@ object BrowserSettingsStore {
     private const val KEY_EDGE_GESTURES = "edge_gestures_enabled"
     private const val KEY_DOH = "doh_provider"
     private const val KEY_DARK_MODE = "is_dark_mode"
+    private const val KEY_HOME_COVER_URI = "home_cover_uri"
 
     fun load(context: Context): BrowserSettings {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -50,7 +52,8 @@ object BrowserSettingsStore {
             reachabilityEnabled = prefs.getBoolean(KEY_REACHABILITY, false),
             edgeGesturesEnabled = prefs.getBoolean(KEY_EDGE_GESTURES, false),
             dohProvider = DohProvider.fromName(prefs.getString(KEY_DOH, null)),
-            isDarkMode = prefs.getBoolean(KEY_DARK_MODE, true)
+            isDarkMode = prefs.getBoolean(KEY_DARK_MODE, true),
+            homeCoverUri = prefs.getString(KEY_HOME_COVER_URI, null)
         )
     }
 
@@ -65,6 +68,7 @@ object BrowserSettingsStore {
             .putBoolean(KEY_EDGE_GESTURES, settings.edgeGesturesEnabled)
             .putString(KEY_DOH, settings.dohProvider.name)
             .putBoolean(KEY_DARK_MODE, settings.isDarkMode)
+            .putString(KEY_HOME_COVER_URI, settings.homeCoverUri)
             .apply()
     }
 }
