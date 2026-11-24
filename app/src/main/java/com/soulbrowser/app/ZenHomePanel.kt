@@ -70,8 +70,7 @@ internal fun ZenHomePanel(
     onOpenWorkspaces: () -> Unit,
     onOpenContainers: () -> Unit,
     onOpenTabs: () -> Unit,
-    onOpenMenu: () -> Unit,
-    onOpenQuickAction: (String) -> Unit
+    onOpenMenu: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     val accent = Color(0xFFAE83FF)
@@ -281,42 +280,6 @@ internal fun ZenHomePanel(
                         }
                         Spacer(Modifier.height(5.dp))
                         Text("Add", color = Color.White, fontSize = 11.sp)
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-            Surface(
-                color = Color(0xC92A2B48),
-                shape = RoundedCornerShape(22.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.13f))
-            ) {
-                Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("✦", color = accent, fontSize = 20.sp)
-                        Spacer(Modifier.width(9.dp))
-                        Text("Quick Actions", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.weight(1f))
-                        Text("›", color = Color.White.copy(alpha = 0.8f), fontSize = 24.sp)
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        listOf("Reader Mode", "Translate", "Screenshot", "Open Container").forEachIndexed { index, label ->
-                            val symbol = listOf("▤", "文", "▣", "⬡")[index]
-                            Column(
-                                Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(15.dp))
-                                    .background(Color.White.copy(alpha = 0.09f))
-                                    .clickable { onOpenQuickAction(label) }
-                                    .padding(vertical = 12.dp, horizontal = 3.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(symbol, color = Color.White, fontSize = 21.sp)
-                                Spacer(Modifier.height(5.dp))
-                                Text(label, color = Color.White, fontSize = 10.sp, lineHeight = 12.sp, maxLines = 2)
-                            }
-                        }
                     }
                 }
             }
