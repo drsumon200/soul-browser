@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
@@ -2300,13 +2301,13 @@ private fun HomePanel(
             Modifier
                 .size(72.dp)
                 .clip(RoundedCornerShape(24.dp))
-                .background(Lavender),
+                .background(Color(0xFF201A3D)),
             contentAlignment = Alignment.Center
         ) {
-            Text("S", color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Black)
+            Icon(painter = painterResource(R.drawable.ic_ethar_logo), contentDescription = "Ethar Browser", tint = Color.Unspecified, modifier = Modifier.size(54.dp))
         }
         Spacer(Modifier.height(14.dp))
-        Text("Soul Browser", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = SoulColors.Text)
+        Text("Ethar Browser", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = SoulColors.Text)
         Spacer(Modifier.height(4.dp))
         Text("A quieter way to browse.", color = Muted, fontSize = 13.sp)
 
