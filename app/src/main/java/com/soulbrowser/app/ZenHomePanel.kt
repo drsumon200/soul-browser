@@ -40,6 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -83,6 +86,39 @@ internal fun ZenHomePanel(
                 )
             )
     ) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            drawRect(
+                Brush.radialGradient(
+                    colors = listOf(Color(0xFFFF9C88).copy(alpha = 0.42f), Color(0xFF5A4D76).copy(alpha = 0.12f), Color.Transparent),
+                    center = Offset(w * 0.52f, h * 0.34f),
+                    radius = w * 0.82f
+                )
+            )
+            val distantRidge = Path().apply {
+                moveTo(0f, h * 0.47f)
+                cubicTo(w * 0.18f, h * 0.38f, w * 0.22f, h * 0.50f, w * 0.42f, h * 0.44f)
+                cubicTo(w * 0.60f, h * 0.36f, w * 0.72f, h * 0.50f, w, h * 0.40f)
+                lineTo(w, h)
+                lineTo(0f, h)
+                close()
+            }
+            drawPath(distantRidge, Brush.verticalGradient(listOf(Color(0xFF3B456B), Color(0xFF18233D)), h * 0.38f, h * 0.78f))
+            val nearRidge = Path().apply {
+                moveTo(0f, h * 0.59f)
+                cubicTo(w * 0.12f, h * 0.48f, w * 0.20f, h * 0.65f, w * 0.36f, h * 0.57f)
+                cubicTo(w * 0.56f, h * 0.48f, w * 0.72f, h * 0.67f, w, h * 0.54f)
+                lineTo(w, h)
+                lineTo(0f, h)
+                close()
+            }
+            drawPath(nearRidge, Brush.verticalGradient(listOf(Color(0xFF1A2945).copy(alpha = 0.72f), Color(0xFF10182D)), h * 0.52f, h))
+            for (i in 0..8) {
+                val y = h * (0.68f + i * 0.025f)
+                drawLine(Color(0xFFFFB59A).copy(alpha = 0.10f - i * 0.008f), Offset(w * 0.18f, y), Offset(w * 0.82f, y), strokeWidth = 1.2f)
+            }
+        }
         Column(
             Modifier
                 .fillMaxSize()
