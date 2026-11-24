@@ -277,6 +277,21 @@ private fun SoulApp(
         pendingFilePrompt = null
     }
 
+    val homeCoverPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            settings = settings.copy(homeCoverUri = uri.toString())
+            BrowserSettingsStore.save(context, settings)
+        }
+    }
+
     val downloadPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { destination ->
@@ -1322,6 +1337,8 @@ private fun SoulApp(
                                     containers = containers,
                                     speedDials = speedDials,
                                     tabCount = workspaceTabCount,
+                                    coverImageUri = settings.homeCoverUri,
+                                    onChangeCover = { homeCoverPicker.launch(arrayOf("image/*")) },
                                     onSearch = { raw ->
                                         val target = normalizeAddress(raw, settings.searchEngine)
                                         if (target.isNotBlank()) navigateTo(target)
@@ -1350,7 +1367,6 @@ private fun SoulApp(
                                     },
                                     onOpenWorkspaces = { showSpaces = true },
                                     onOpenContainers = { showContainers = true },
-                onOpenExtensions = { showExtensions = true },
                                     onOpenTabs = { showVisualTabs = true },
                                     onOpenMenu = { showMoreMenu = true },
                                 )
