@@ -18,7 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Briefcase
+import androidx.compose.material.icons.filled.BusinessCenter
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Home
@@ -307,7 +307,7 @@ internal fun ZenHomePanel(
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = if (selected) 0.35f else 0.12f))
                             ) {
                                 Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(if (container.isPrivate) Icons.Default.Layers else Icons.Default.Briefcase, null, tint = Color.White, modifier = Modifier.size(17.dp))
+                                    Icon(if (container.isPrivate) Icons.Default.Layers else Icons.Default.BusinessCenter, null, tint = Color.White, modifier = Modifier.size(17.dp))
                                     Spacer(Modifier.width(6.dp))
                                     Column {
                                         Text(container.name, color = Color.White, fontSize = 12.sp, maxLines = 1)
