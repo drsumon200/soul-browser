@@ -1,6 +1,8 @@
 package com.soulbrowser.app
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -47,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun ZenHomePanel(
     modifier: Modifier = Modifier,
@@ -214,7 +217,7 @@ internal fun ZenHomePanel(
                             .clip(RoundedCornerShape(18.dp))
                             .background(Color.White.copy(alpha = 0.12f))
                             .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(18.dp))
-                            .clickable { onOpenSpeedDial(item) }
+                            .combinedClickable(onClick = { onOpenSpeedDial(item) }, onLongClick = { onEditSpeedDial(item) })
                             .padding(vertical = 10.dp, horizontal = 4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
