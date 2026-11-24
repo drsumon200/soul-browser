@@ -175,18 +175,6 @@ private fun SoulApp(
         onDispose { }
     }
 
-    fun refreshInstalledExtensions() {
-        runtime.webExtensionController.list().accept(
-            { list -> installedExtensions = list ?: emptyList() },
-            { error ->
-                Toast.makeText(context, "Could not load extensions: ${error.message ?: "unknown error"}", Toast.LENGTH_SHORT).show()
-            }
-        )
-    }
-
-    LaunchedEffect(showExtensions) {
-        if (showExtensions) refreshInstalledExtensions()
-    }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val browserViewModel: BrowserViewModel = viewModel()
@@ -223,6 +211,19 @@ private fun SoulApp(
     var showExtensions by remember { mutableStateOf(false) }
     var installedExtensions by remember { mutableStateOf<List<WebExtension>>(emptyList()) }
     var isInstallingExtension by remember { mutableStateOf(false) }
+
+    fun refreshInstalledExtensions() {
+        runtime.webExtensionController.list().accept(
+            { list -> installedExtensions = list ?: emptyList() },
+            { error ->
+                Toast.makeText(context, "Could not load extensions: ${error.message ?: "unknown error"}", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    LaunchedEffect(showExtensions) {
+        if (showExtensions) refreshInstalledExtensions()
+    }
     var showViewSource by remember { mutableStateOf<String?>(null) }
     var showSpeedDialEditor by remember { mutableStateOf(false) }
     var editingSpeedDial by remember { mutableStateOf<SpeedDialItem?>(null) }
