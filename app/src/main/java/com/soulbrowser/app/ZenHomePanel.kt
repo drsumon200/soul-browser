@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -101,9 +102,9 @@ internal fun ZenHomePanel(
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.Spa, null, tint = accent, modifier = Modifier.size(32.dp))
+                Icon(painter = painterResource(R.drawable.ic_ethar_logo), contentDescription = "Ethar Browser", tint = Color.Unspecified, modifier = Modifier.size(36.dp))
                 Spacer(Modifier.width(10.dp))
-                Text("Soul Browser", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text("Ethar Browser", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 Surface(
                     onClick = onOpenTabs,
                     color = Color.White.copy(alpha = 0.10f),
