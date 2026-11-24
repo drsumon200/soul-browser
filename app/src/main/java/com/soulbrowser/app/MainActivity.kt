@@ -972,6 +972,7 @@ private fun SoulApp(
                     .background(Ink)
             ) {
                 if (!isFullscreen) {
+                    if (activeTab?.url != "about:blank") {
                     // Standard Top Browser Header (History | Omnibox | Tabs [N] | Menu (⋮))
                     Row(
                         Modifier
@@ -1269,6 +1270,8 @@ private fun SoulApp(
                     }
                 }
 
+                    }
+
                 // Main Content Viewport - Unrestricted Touch & Fling Delivery
                 Box(Modifier.fillMaxSize().weight(1f)) {
                             val activeSession = activeTab?.session
@@ -1287,17 +1290,18 @@ private fun SoulApp(
                                     }
                                 )
                             } else if (activeTab == null || activeSession == null || activeTab.url == "about:blank") {
-                                HomePanel(
+                                ZenHomePanel(
                                     modifier = Modifier.fillMaxSize(),
+                                    activeWorkspace = activeWorkspace,
+                                    workspaces = workspaces,
                                     activeContainer = activeContainer,
+                                    containers = containers,
                                     speedDials = speedDials,
-                                    trackersBlocked = AdblockFilterEngine.totalBlocked(),
-                                    unreadArticles = readingListItems.count { !it.isRead },
-                                    onOpen = { rawUrl ->
-                                        val target = normalizeAddress(rawUrl, settings.searchEngine)
+                                    tabCount = workspaceTabCount,
+                                    onSearch = { raw ->
+                                        val target = normalizeAddress(raw, settings.searchEngine)
                                         if (target.isNotBlank()) navigateTo(target)
                                     },
-                                    onNewTab = { createTab() },
                                     onOpenSpeedDial = { item -> navigateTo(item.url) },
                                     onEditSpeedDial = { item ->
                                         editingSpeedDial = item
@@ -1307,8 +1311,32 @@ private fun SoulApp(
                                         editingSpeedDial = null
                                         showSpeedDialEditor = true
                                     },
-                                    onOpenPrivacyShield = { showPrivacyShield = true },
-                                    onOpenReadingList = { showReadingList = true }
+                                    onSwitchWorkspace = { switchWorkspace(it) },
+                                    onOpenWorkspaces = { showSpaces = true },
+                                    onOpenContainers = { showContainers = true },
+                                    onOpenTabs = { showVisualTabs = true },
+                                    onOpenMenu = { showMoreMenu = true },
+                                    onOpenQuickAction = { action ->
+                                        when (action) {
+                                            "Open Container" -> showContainers = true
+                                            "Translate" -> activeTab?.takeIf { it.url != "about:blank" }?.let {
+                                                navigateTo(PageTranslateHelper.buildTranslatedUrl(it.url))
+                                            } ?: Toast.makeText(context, "Open a page first", Toast.LENGTH_SHORT).show()
+                                            "Screenshot" -> {
+                                                if (activeTab?.url != "about:blank") FullPageScreenshotter.captureAndSave(context, activeGeckoView)
+                                                else Toast.makeText(context, "Open a page first", Toast.LENGTH_SHORT).show()
+                                            }
+                                            "Reader Mode" -> activeTab?.takeIf { it.url != "about:blank" }?.let { tab ->
+                                                coroutineScope.launch {
+                                                    val article = ReaderModeExtractor.fetchAndExtract(tab.url)
+                                                    withContext(Dispatchers.Main) {
+                                                        if (article != null) activeArticle = article
+                                                        else Toast.makeText(context, "Reader view unavailable", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            } ?: Toast.makeText(context, "Open an article first", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
                                 )
                             } else if (splitViewState.isEnabled && splitViewState.secondaryTabId != null) {
                                 val secondaryTab = tabs.firstOrNull { it.id == splitViewState.secondaryTabId }
