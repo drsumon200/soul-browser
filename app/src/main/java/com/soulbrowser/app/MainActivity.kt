@@ -67,6 +67,8 @@ import org.mozilla.geckoview.GeckoResult
 import org.mozilla.geckoview.GeckoRuntime
 import org.mozilla.geckoview.GeckoSession
 import org.mozilla.geckoview.GeckoView
+import org.mozilla.geckoview.WebExtension
+import org.mozilla.geckoview.WebExtensionController
 import org.mozilla.geckoview.WebResponse
 import java.net.URLDecoder
 import java.util.UUID
@@ -167,6 +169,24 @@ private fun SoulApp(
 ) {
     val context = LocalContext.current
     val activity = context as Activity
+
+    DisposableEffect(runtime, activity) {
+        WebExtensionManager.configureInstallPrompt(activity, runtime)
+        onDispose { }
+    }
+
+    fun refreshInstalledExtensions() {
+        runtime.webExtensionController.list().accept(
+            { list -> installedExtensions = list ?: emptyList() },
+            { error ->
+                Toast.makeText(context, "Could not load extensions: ${error.message ?: "unknown error"}", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    LaunchedEffect(showExtensions) {
+        if (showExtensions) refreshInstalledExtensions()
+    }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val browserViewModel: BrowserViewModel = viewModel()
@@ -200,6 +220,9 @@ private fun SoulApp(
     var showReadingList by remember { mutableStateOf(false) }
     var showPrivacyShield by remember { mutableStateOf(false) }
     var showShareCard by remember { mutableStateOf(false) }
+    var showExtensions by remember { mutableStateOf(false) }
+    var installedExtensions by remember { mutableStateOf<List<WebExtension>>(emptyList()) }
+    var isInstallingExtension by remember { mutableStateOf(false) }
     var showViewSource by remember { mutableStateOf<String?>(null) }
     var showSpeedDialEditor by remember { mutableStateOf(false) }
     var editingSpeedDial by remember { mutableStateOf<SpeedDialItem?>(null) }
@@ -1326,6 +1349,7 @@ private fun SoulApp(
                                     },
                                     onOpenWorkspaces = { showSpaces = true },
                                     onOpenContainers = { showContainers = true },
+                onOpenExtensions = { showExtensions = true },
                                     onOpenTabs = { showVisualTabs = true },
                                     onOpenMenu = { showMoreMenu = true },
                                     onOpenQuickAction = { action ->
@@ -1842,6 +1866,70 @@ private fun SoulApp(
                     }
                 },
                 onDismiss = { showMoreMenu = false }
+            )
+        }
+
+        // Extensions Manager
+        if (showExtensions) {
+            ExtensionsManagerSheet(
+                extensions = installedExtensions,
+                isInstalling = isInstallingExtension,
+                onInstallUblock = {
+                    if (!isInstallingExtension && installedExtensions.none { it.id == WebExtensionManager.UBLOCK_EXTENSION_ID }) {
+                        isInstallingExtension = true
+                        runCatching {
+                            runtime.webExtensionController.install(
+                                WebExtensionManager.UBLOCK_XPI_URL,
+                                WebExtensionController.INSTALLATION_METHOD_MANAGER
+                            ).accept(
+                                {
+                                    isInstallingExtension = false
+                                    refreshInstalledExtensions()
+                                    Toast.makeText(context, "uBlock Origin installed", Toast.LENGTH_SHORT).show()
+                                },
+                                { error ->
+                                    isInstallingExtension = false
+                                    Toast.makeText(context, "Extension install failed: ${error.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        }.onFailure { error ->
+                            isInstallingExtension = false
+                            Toast.makeText(context, "Extension install failed: ${error.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                },
+                onToggle = { extension, enable ->
+                    val operation = if (enable) {
+                        runtime.webExtensionController.enable(extension, WebExtensionController.EnableSource.USER)
+                    } else {
+                        runtime.webExtensionController.disable(extension, WebExtensionController.EnableSource.USER)
+                    }
+                    operation.accept(
+                        { refreshInstalledExtensions() },
+                        { error ->
+                            Toast.makeText(context, "Could not update extension: ${error.message ?: "unknown error"}", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                },
+                onUninstall = { extension ->
+                    NativeAlertDialog.Builder(context)
+                        .setTitle("Remove extension?")
+                        .setMessage("Uninstall ${extension.metaData.name ?: extension.id} and remove its stored data?")
+                        .setNegativeButton("Cancel", null)
+                        .setPositiveButton("Remove") { _, _ ->
+                            runtime.webExtensionController.uninstall(extension).accept(
+                                {
+                                    refreshInstalledExtensions()
+                                    Toast.makeText(context, "Extension removed", Toast.LENGTH_SHORT).show()
+                                },
+                                { error ->
+                                    Toast.makeText(context, "Could not remove extension: ${error.message ?: "unknown error"}", Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                        .show()
+                },
+                onDismiss = { showExtensions = false }
             )
         }
 
