@@ -82,6 +82,8 @@ fun BrowserMoreMenuDialog(
     onViewSource: () -> Unit,
     onSaveOffline: () -> Unit,
     onReaderMode: () -> Unit,
+    onTranslate: () -> Unit = {},
+    onScreenshot: () -> Unit = {},
     onSplitScreen: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -101,6 +103,8 @@ fun BrowserMoreMenuDialog(
                     MenuRow(Icons.Default.Extension, "Extensions", true) { onOpenExtensions(); onDismiss() }
                     MenuRow(Icons.Default.Shield, "Privacy shield & stats", true) { onOpenPrivacyShield(); onDismiss() }
                     MenuRow(Icons.Default.AutoStories, "Reader mode", hasActivePage) { onReaderMode(); onDismiss() }
+                    MenuRow(Icons.Default.Language, "Translate page", hasActivePage) { onTranslate(); onDismiss() }
+                    MenuRow(Icons.Default.PhotoCamera, "Screenshot", hasActivePage) { onScreenshot(); onDismiss() }
                     MenuRow(Icons.Default.VerticalSplit, "Split screen view", hasActivePage) { onSplitScreen(); onDismiss() }
                     MenuRow(Icons.Default.QrCode, "Share visual QR card", hasActivePage) { onOpenShareCard(); onDismiss() }
                     MenuRow(Icons.Default.SaveAlt, "Save page offline", hasActivePage) { onSaveOffline(); onDismiss() }
