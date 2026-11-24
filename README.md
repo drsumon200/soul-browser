@@ -1,8 +1,8 @@
-# Ethar Browser for Android
+# Ether Browser for Android
 
 [![Build APK](https://github.com/drsumon200/soul-browser/actions/workflows/build-apk.yml/badge.svg?branch=main)](https://github.com/drsumon200/soul-browser/actions/workflows/build-apk.yml)
 
-**Ethar Browser** is an open-source, Zen-inspired Android browser built from the ground up using **Kotlin 2.3.0**, **Jetpack Compose**, and **Mozilla GeckoView (v150)**.
+**Ether Browser** is an open-source, Zen-inspired Android browser built from the ground up using **Kotlin 2.3.0**, **Jetpack Compose**, and **Mozilla GeckoView (v150)**.
 
 Repository: https://github.com/drsumon200/soul-browser
 
@@ -82,4 +82,4 @@ Automated CI on GitHub Actions runs unit tests, verifies builds, and publishes d
 
 - GeckoView: [Mozilla GeckoView](https://mozilla.github.io/geckoview/) (MPL-2.0)
 - Zen Browser Desktop: [Zen Browser](https://github.com/zen-browser/desktop) (MPL-2.0)
-- Ethar Browser: [Dr Sumon](https://github.com/drsumon200) (MIT / MPL-2.0 compatible)
+- Ether Browser: [Dr Sumon](https://github.com/drsumon200) (MIT / MPL-2.0 compatible)
