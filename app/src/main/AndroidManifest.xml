@@ -16,9 +16,9 @@
         android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="Soul Browser"
+        android:label="Ethar Browser"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SoulBrowser"
+        android:theme="@style/Theme.EtharBrowser"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
