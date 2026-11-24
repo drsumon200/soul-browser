@@ -2304,10 +2304,10 @@ private fun HomePanel(
                 .background(Color(0xFF201A3D)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(painter = painterResource(R.drawable.ic_ethar_logo), contentDescription = "Ethar Browser", tint = Color.Unspecified, modifier = Modifier.size(54.dp))
+            Icon(painter = painterResource(R.drawable.ic_ethar_logo), contentDescription = "Ether Browser", tint = Color.Unspecified, modifier = Modifier.size(54.dp))
         }
         Spacer(Modifier.height(14.dp))
-        Text("Ethar Browser", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = SoulColors.Text)
+        Text("Ether Browser", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = SoulColors.Text)
         Spacer(Modifier.height(4.dp))
         Text("A quieter way to browse.", color = Muted, fontSize = 13.sp)
 
