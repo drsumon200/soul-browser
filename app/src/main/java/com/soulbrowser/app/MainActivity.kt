@@ -1312,6 +1312,18 @@ private fun SoulApp(
                                         showSpeedDialEditor = true
                                     },
                                     onSwitchWorkspace = { switchWorkspace(it) },
+                                    onSelectContainer = { item ->
+                                        val action = {
+                                            activeContainer = item
+                                            workspaces = workspaces.map { space ->
+                                                if (space.id == activeWorkspace.id) space.copy(containerId = item.id) else space
+                                            }
+                                            activeWorkspace = workspaces.first { it.id == activeWorkspace.id }
+                                            SoulStore.saveWorkspaces(context, workspaces)
+                                            createTab(containerOverride = item)
+                                        }
+                                        if (item.isPrivate) requestPrivateAccess(action) else action()
+                                    },
                                     onOpenWorkspaces = { showSpaces = true },
                                     onOpenContainers = { showContainers = true },
                                     onOpenTabs = { showVisualTabs = true },
