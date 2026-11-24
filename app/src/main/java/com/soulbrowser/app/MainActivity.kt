@@ -1353,27 +1353,6 @@ private fun SoulApp(
                 onOpenExtensions = { showExtensions = true },
                                     onOpenTabs = { showVisualTabs = true },
                                     onOpenMenu = { showMoreMenu = true },
-                                    onOpenQuickAction = { action ->
-                                        when (action) {
-                                            "Open Container" -> showContainers = true
-                                            "Translate" -> activeTab?.takeIf { it.url != "about:blank" }?.let {
-                                                navigateTo(PageTranslateHelper.buildTranslatedUrl(it.url))
-                                            } ?: Toast.makeText(context, "Open a page first", Toast.LENGTH_SHORT).show()
-                                            "Screenshot" -> {
-                                                if (activeTab?.url?.let { it != "about:blank" } == true) FullPageScreenshotter.captureAndSave(context, activeGeckoView)
-                                                else Toast.makeText(context, "Open a page first", Toast.LENGTH_SHORT).show()
-                                            }
-                                            "Reader Mode" -> activeTab?.takeIf { it.url != "about:blank" }?.let { tab ->
-                                                coroutineScope.launch {
-                                                    val article = ReaderModeExtractor.fetchAndExtract(tab.url)
-                                                    withContext(Dispatchers.Main) {
-                                                        if (article != null) activeArticle = article
-                                                        else Toast.makeText(context, "Reader view unavailable", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
-                                            } ?: Toast.makeText(context, "Open an article first", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
                                 )
                             } else if (splitViewState.isEnabled && splitViewState.secondaryTabId != null) {
                                 val secondaryTab = tabs.firstOrNull { it.id == splitViewState.secondaryTabId }
@@ -1854,6 +1833,16 @@ private fun SoulApp(
                                 }
                             }
                         }
+                    }
+                },
+                onTranslate = {
+                    activeTab?.takeIf { it.url != "about:blank" }?.let { tab ->
+                        navigateTo(PageTranslateHelper.buildTranslatedUrl(tab.url))
+                    }
+                },
+                onScreenshot = {
+                    if (activeTab?.url?.let { it != "about:blank" } == true) {
+                        FullPageScreenshotter.captureAndSave(context, activeGeckoView)
                     }
                 },
                 onSplitScreen = {
