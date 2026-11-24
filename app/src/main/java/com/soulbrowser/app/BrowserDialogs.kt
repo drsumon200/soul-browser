@@ -73,6 +73,7 @@ fun BrowserMoreMenuDialog(
     onOpenBookmarks: () -> Unit = {},
     onOpenWorkspaces: () -> Unit = {},
     onOpenContainers: () -> Unit = {},
+    onOpenExtensions: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenDownloads: () -> Unit,
     onOpenReadingList: () -> Unit,
@@ -97,6 +98,7 @@ fun BrowserMoreMenuDialog(
                     MenuRow(Icons.Default.MenuBook, "Reading list", true) { onOpenReadingList(); onDismiss() }
                     MenuRow(Icons.Default.Workspaces, "Workspaces", true) { onOpenWorkspaces(); onDismiss() }
                     MenuRow(Icons.Default.Layers, "Containers", true) { onOpenContainers(); onDismiss() }
+                    MenuRow(Icons.Default.Extension, "Extensions", true) { onOpenExtensions(); onDismiss() }
                     MenuRow(Icons.Default.Shield, "Privacy shield & stats", true) { onOpenPrivacyShield(); onDismiss() }
                     MenuRow(Icons.Default.AutoStories, "Reader mode", hasActivePage) { onReaderMode(); onDismiss() }
                     MenuRow(Icons.Default.VerticalSplit, "Split screen view", hasActivePage) { onSplitScreen(); onDismiss() }
