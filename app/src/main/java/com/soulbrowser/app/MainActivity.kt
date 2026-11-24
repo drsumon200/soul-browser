@@ -1883,56 +1883,23 @@ private fun SoulApp(
             )
         }
 
-        // Workspaces Dialog
+        // Zen-style Workspaces sheet
         if (showSpaces) {
-            AlertDialog(
-                onDismissRequest = { showSpaces = false },
-                containerColor = Panel,
-                title = { Text("Workspaces", color = SoulColors.Text) },
-                text = {
-                    Column {
-                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                            items(workspaces, key = { it.id }) { space ->
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            switchWorkspace(space)
-                                            showSpaces = false
-                                        }
-                                        .padding(vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Default.Workspaces,
-                                        null,
-                                        tint = if (space.id == activeWorkspace.id) Lavender else Muted
-                                    )
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(space.name, Modifier.weight(1f), color = SoulColors.Text)
-                                    IconButton(onClick = { editingWorkspace = space }) {
-                                        Icon(Icons.Default.Edit, "Edit", tint = Muted)
-                                    }
-                                    if (space.id == activeWorkspace.id) {
-                                        Icon(Icons.Default.Check, null, tint = Lavender)
-                                    }
-                                }
-                            }
-                        }
-                        TextButton(
-                            onClick = {
-                                createDialog = "workspace"
-                                newName = ""
-                                showSpaces = false
-                            }
-                        ) {
-                            Text("+ Create workspace", color = Lavender)
-                        }
-                    }
+            ZenWorkspaceSheet(
+                workspaces = workspaces,
+                activeWorkspace = activeWorkspace,
+                tabs = tabs,
+                onSelect = { space ->
+                    switchWorkspace(space)
+                    showSpaces = false
                 },
-                confirmButton = {
-                    TextButton(onClick = { showSpaces = false }) { Text("Close", color = Lavender) }
-                }
+                onEdit = { editingWorkspace = it },
+                onCreate = {
+                    createDialog = "workspace"
+                    newName = ""
+                    showSpaces = false
+                },
+                onDismiss = { showSpaces = false }
             )
         }
 
@@ -1966,79 +1933,32 @@ private fun SoulApp(
             )
         }
 
-        // Containers Dialog
+        // Zen-style Containers sheet
         if (showContainers) {
-            AlertDialog(
-                onDismissRequest = { showContainers = false },
-                containerColor = Panel,
-                title = { Text("Containers", color = SoulColors.Text) },
-                text = {
-                    Column {
-                        LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                            items(containers, key = { it.id }) { item ->
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            val action = {
-                                                activeContainer = item
-                                                workspaces = workspaces.map { space ->
-                                                    if (space.id == activeWorkspace.id) {
-                                                        space.copy(containerId = item.id)
-                                                    } else {
-                                                        space
-                                                    }
-                                                }
-                                                activeWorkspace = workspaces.first { it.id == activeWorkspace.id }
-                                                SoulStore.saveWorkspaces(context, workspaces)
-                                                showContainers = false
-                                                createTab(containerOverride = item)
-                                            }
-                                            if (item.isPrivate) requestPrivateAccess(action) else action()
-                                        }
-                                        .padding(vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        Modifier
-                                            .size(10.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(item.color))
-                                    )
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(
-                                        text = if (item.isPrivate) "${item.name} (Private)" else item.name,
-                                        modifier = Modifier.weight(1f),
-                                        color = SoulColors.Text
-                                    )
-                                    if (item.id == activeContainer.id) {
-                                        Icon(Icons.Default.Check, null, tint = Lavender)
-                                    }
-                                    IconButton(onClick = { confirmClearContainer = item }) {
-                                        Icon(
-                                            Icons.Default.DeleteOutline,
-                                            "Clear data",
-                                            tint = Muted
-                                        )
-                                    }
-                                }
-                            }
+            ZenContainerSheet(
+                containers = containers,
+                activeContainer = activeContainer,
+                onSelect = { item ->
+                    val action = {
+                        activeContainer = item
+                        workspaces = workspaces.map { space ->
+                            if (space.id == activeWorkspace.id) space.copy(containerId = item.id) else space
                         }
-                        TextButton(
-                            onClick = {
-                                createDialog = "container"
-                                newName = ""
-                                newContainerPrivate = false
-                                showContainers = false
-                            }
-                        ) {
-                            Text("+ New container", color = Lavender)
-                        }
+                        activeWorkspace = workspaces.first { it.id == activeWorkspace.id }
+                        SoulStore.saveWorkspaces(context, workspaces)
+                        showContainers = false
+                        createTab(containerOverride = item)
                     }
+                    if (item.isPrivate) requestPrivateAccess(action) else action()
                 },
-                confirmButton = {
-                    TextButton(onClick = { showContainers = false }) { Text("Close", color = Lavender) }
-                }
+                onClear = { confirmClearContainer = it },
+                onCreate = {
+                    createDialog = "container"
+                    newName = ""
+                    newContainerPrivate = false
+                    showContainers = false
+                },
+                onDismiss = { showContainers = false }
             )
         }
 
