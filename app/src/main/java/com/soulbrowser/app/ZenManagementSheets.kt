@@ -182,10 +182,9 @@ internal fun ZenContainerSheet(
                             Box(Modifier.size(30.dp).clip(CircleShape).background(Color(0xFF1685F8)), contentAlignment = Alignment.Center) {
                                 Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(19.dp))
                             }
-                        } else {
-                            IconButton(onClick = { onClear(container) }) {
-                                Icon(Icons.Default.DeleteOutline, "Clear container data", tint = Color(0xFF9B96B3), modifier = Modifier.size(19.dp))
-                            }
+                        }
+                        IconButton(onClick = { onClear(container) }) {
+                            Icon(Icons.Default.DeleteOutline, "Clear container data", tint = Color(0xFF9B96B3), modifier = Modifier.size(19.dp))
                         }
                     }
                 }
